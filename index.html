@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Cricket Insights Chat</title>
+    <link rel="stylesheet" href="styles.css?v=2" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">Cricket intelligence lab</p>
+        <h1>Cricket insights chat</h1>
+        <p>
+          Instant access to indexed matches, player trends, and analytic notes. Type a name, compare
+          stats, and let the bot surface the most compelling storylines.
+        </p>
+      </header>
+
+      <section>
+        <h2>Data coverage</h2>
+        <div class="grid" id="summary-grid"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <h2>Player spotlight</h2>
+          <p>Sample profiles ready for rapid comparisons.</p>
+        </div>
+        <div class="player-grid" id="player-list"></div>
+      </section>
+
+      <section>
+        <div class="section-heading section-heading-inline">
+          <div>
+            <h2>Metrics snapshot</h2>
+            <p>Core metrics first, placeholders on demand.</p>
+          </div>
+          <button type="button" class="ghost-button" id="metrics-toggle" hidden>
+            Show more
+          </button>
+        </div>
+        <div class="metrics-grid" id="metrics-grid"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <h2>Match highlights</h2>
+          <p>Recent fixtures that fuel the analytics models.</p>
+        </div>
+        <div class="match-list" id="match-list"></div>
+      </section>
+
+      <section class="live-section">
+        <div class="section-heading section-heading-inline">
+          <div>
+            <h2>Live Match Center</h2>
+            <p>Real-time scoreboard with momentum and player highlights.</p>
+          </div>
+          <div class="live-toolbar">
+            <span class="live-status-chip" id="live-status-chip">Live feed: checking...</span>
+            <button type="button" class="ghost-button" id="live-refresh-button">Refresh</button>
+          </div>
+        </div>
+        <div class="live-grid">
+          <article class="live-card live-scoreboard-card" id="live-scoreboard">
+            <p class="chat-subtle">Loading live scoreboard...</p>
+          </article>
+          <article class="live-card" id="live-momentum-card">
+            <p class="chat-subtle">Momentum analysis will appear here.</p>
+          </article>
+        </div>
+        <div class="live-grid">
+          <article class="live-card" id="live-players-card">
+            <p class="chat-subtle">Player highlights will appear here.</p>
+          </article>
+          <article class="live-card" id="live-commentary-card">
+            <p class="chat-subtle">Ball-by-ball commentary feed will appear here.</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <h2>Expert mindset</h2>
+          <p>Hand-curated notes to ground context.</p>
+        </div>
+        <div class="insight-list" id="insight-list"></div>
+      </section>
+
+      <section class="chat-section">
+        <div class="section-heading">
+          <h2>Ask the bot</h2>
+          <p>Start with a player name or stat request.</p>
+        </div>
+        <form id="player-query-form" class="chat-form">
+          <input
+            id="query-input"
+            type="text"
+            name="query"
+            placeholder='Try "Rohit Sharma", "India", or "Rohit Sharma vs Kane Williamson"'
+            required
+            autocomplete="off"
+          />
+          <button type="submit">Ask</button>
+        </form>
+        <div class="quick-prompts" id="quick-prompts" aria-label="Quick prompts"></div>
+        <div class="chat-response" id="chat-response">
+          Ask about a player, a team, or compare two players.
+        </div>
+      </section>
+    </main>
+    <script type="module" src="script.js?v=2"></script>
+  </body>
+</html>
