@@ -2,114 +2,120 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Cricket Insights Chat</title>
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cricket Stats</title>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <header class="hero">
-        <p class="eyebrow">Cricket intelligence lab</p>
-        <h1>Cricket insights chat</h1>
-        <p>
-          Instant access to indexed matches, player trends, and analytic notes. Type a name, compare
-          stats, and let the bot surface the most compelling storylines.
-        </p>
-      </header>
+    <header class="topbar">
+      <div class="brand">Cricket Stats</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-btn is-active" data-page="home" type="button">Home</button>
+        <button class="nav-btn" data-page="players" type="button">Players</button>
+        <button class="nav-btn" data-page="matches" type="button">Matches</button>
+        <button class="nav-btn" data-page="compare" type="button">Compare</button>
+        <button class="nav-btn" data-page="chat" type="button">Chat</button>
+      </nav>
+    </header>
 
-      <section>
-        <h2>Data coverage</h2>
-        <div class="grid" id="summary-grid"></div>
+    <main class="layout">
+      <section class="page is-active" id="page-home">
+        <h1>Cricket Stats</h1>
+        <p class="subline">Quick look at players, teams, and matches in this dataset.</p>
+
+        <h2>Quick Stats</h2>
+        <div class="grid-4" id="home-quick-stats"></div>
+
+        <h2>Top Players</h2>
+        <div class="grid-3" id="home-top-players"></div>
+
+        <h2>Recent Matches</h2>
+        <div class="grid-3" id="home-recent-matches"></div>
       </section>
 
-      <section>
-        <div class="section-heading">
-          <h2>Player spotlight</h2>
-          <p>Sample profiles ready for rapid comparisons.</p>
+      <section class="page" id="page-players">
+        <h1>Players</h1>
+        <div class="toolbar">
+          <input id="players-search" type="text" placeholder="Search player name" />
+          <button id="players-search-btn" type="button">Search</button>
         </div>
-        <div class="player-grid" id="player-list"></div>
+
+        <div class="grid-3" id="players-list"></div>
+
+        <div class="pager">
+          <button id="players-prev" type="button">Previous</button>
+          <span id="players-page-label"></span>
+          <button id="players-next" type="button">Next</button>
+        </div>
+
+        <article class="detail-card hidden" id="player-detail"></article>
       </section>
 
-      <section>
-        <div class="section-heading section-heading-inline">
-          <div>
-            <h2>Metrics snapshot</h2>
-            <p>Core metrics first, placeholders on demand.</p>
-          </div>
-          <button type="button" class="ghost-button" id="metrics-toggle" hidden>
-            Show more
-          </button>
+      <section class="page" id="page-matches">
+        <h1>Matches</h1>
+        <div class="toolbar wrap">
+          <select id="matches-team-filter">
+            <option value="">All teams</option>
+          </select>
+          <select id="matches-season-filter">
+            <option value="">All seasons</option>
+          </select>
+          <select id="matches-venue-filter">
+            <option value="">All venues</option>
+          </select>
+          <button id="matches-apply-filter" type="button">Apply</button>
         </div>
-        <div class="metrics-grid" id="metrics-grid"></div>
+
+        <div class="grid-2" id="matches-list"></div>
+
+        <div class="pager">
+          <button id="matches-prev" type="button">Previous</button>
+          <span id="matches-page-label"></span>
+          <button id="matches-next" type="button">Next</button>
+        </div>
+
+        <article class="detail-card hidden" id="match-detail"></article>
       </section>
 
-      <section>
-        <div class="section-heading">
-          <h2>Match highlights</h2>
-          <p>Recent fixtures that fuel the analytics models.</p>
+      <section class="page" id="page-compare">
+        <h1>Compare Players</h1>
+        <p class="subline">Pick two players to compare side by side.</p>
+
+        <div class="toolbar">
+          <input id="compare-player-1" type="text" list="player-options" placeholder="Player 1" />
+          <input id="compare-player-2" type="text" list="player-options" placeholder="Player 2" />
+          <button id="compare-run" type="button">Compare</button>
+          <datalist id="player-options"></datalist>
         </div>
-        <div class="match-list" id="match-list"></div>
+
+        <div id="compare-result"></div>
       </section>
 
-      <section class="live-section">
-        <div class="section-heading section-heading-inline">
-          <div>
-            <h2>Live Match Center</h2>
-            <p>Real-time scoreboard with momentum and player highlights.</p>
-          </div>
-          <div class="live-toolbar">
-            <span class="live-status-chip" id="live-status-chip">Live feed: checking...</span>
-            <button type="button" class="ghost-button" id="live-refresh-button">Refresh</button>
-          </div>
-        </div>
-        <div class="live-grid">
-          <article class="live-card live-scoreboard-card" id="live-scoreboard">
-            <p class="chat-subtle">Loading live scoreboard...</p>
-          </article>
-          <article class="live-card" id="live-momentum-card">
-            <p class="chat-subtle">Momentum analysis will appear here.</p>
-          </article>
-        </div>
-        <div class="live-grid">
-          <article class="live-card" id="live-players-card">
-            <p class="chat-subtle">Player highlights will appear here.</p>
-          </article>
-          <article class="live-card" id="live-commentary-card">
-            <p class="chat-subtle">Ball-by-ball commentary feed will appear here.</p>
-          </article>
-        </div>
-      </section>
+      <section class="page" id="page-chat">
+        <h1>Chat</h1>
+        <p class="subline">Ask questions in plain words.</p>
 
-      <section>
-        <div class="section-heading">
-          <h2>Expert mindset</h2>
-          <p>Hand-curated notes to ground context.</p>
+        <div class="chip-row" id="chat-suggestions">
+          <button type="button" class="chip" data-question="Virat Kohli stats">Virat Kohli stats</button>
+          <button type="button" class="chip" data-question="Top run scorers 2019">Top run scorers 2019</button>
+          <button type="button" class="chip" data-question="Most wickets 2020">Most wickets 2020</button>
         </div>
-        <div class="insight-list" id="insight-list"></div>
-      </section>
 
-      <section class="chat-section">
-        <div class="section-heading">
-          <h2>Ask the bot</h2>
-          <p>Start with a player name or stat request.</p>
-        </div>
-        <form id="player-query-form" class="chat-form">
+        <div class="chat-box" id="chat-messages"></div>
+
+        <form class="chat-input" id="chat-form">
           <input
-            id="query-input"
+            id="chat-question"
             type="text"
-            name="query"
-            placeholder='Try "Rohit Sharma", "India", or "Rohit Sharma vs Kane Williamson"'
-            required
+            placeholder="Type your cricket question"
             autocomplete="off"
+            required
           />
-          <button type="submit">Ask</button>
+          <button id="chat-send" type="submit">Send</button>
         </form>
-        <div class="quick-prompts" id="quick-prompts" aria-label="Quick prompts"></div>
-        <div class="chat-response" id="chat-response">
-          Ask about a player, a team, or compare two players.
-        </div>
       </section>
     </main>
-    <script type="module" src="script.js?v=2"></script>
+
+    <script src="script.js"></script>
   </body>
 </html>
