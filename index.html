@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#081824" />
+    <title>Cricket Stats AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind = {
+        config: {
+          corePlugins: {
+            preflight: false
+          },
+          theme: {
+            extend: {
+              fontFamily: {
+                display: ['Space Grotesk', 'sans-serif'],
+                sans: ['Plus Jakarta Sans', 'sans-serif']
+              },
+              boxShadow: {
+                glow: '0 25px 80px rgba(16, 185, 129, 0.18)',
+                soft: '0 22px 60px rgba(15, 23, 42, 0.18)'
+              },
+              animation: {
+                float: 'float 9s ease-in-out infinite',
+                'fade-up': 'fadeUp 0.8s ease-out both',
+                pulsegrid: 'pulseGrid 6s ease-in-out infinite'
+              },
+              keyframes: {
+                float: {
+                  '0%, 100%': { transform: 'translateY(0px)' },
+                  '50%': { transform: 'translateY(-10px)' }
+                },
+                fadeUp: {
+                  '0%': { opacity: '0', transform: 'translateY(18px)' },
+                  '100%': { opacity: '1', transform: 'translateY(0)' }
+                },
+                pulseGrid: {
+                  '0%, 100%': { opacity: '0.3' },
+                  '50%': { opacity: '0.6' }
+                }
+              }
+            }
+          }
+        }
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <button class="brand-lockup section-link" data-page-target="home" type="button">
+            <span class="brand-mark">CS</span>
+            <span class="brand-copy">
+              <strong>Cricket Stats AI</strong>
+              <span>Archive + live intelligence</span>
+            </span>
+          </button>
+          <button class="icon-btn desktop-only" id="sidebar-toggle" type="button" aria-label="Collapse sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="status-card" id="sidebar-status-card">
+          <div class="status-dot"></div>
+          <div>
+            <p class="status-label" id="status-title">Preparing archive</p>
+            <p class="status-copy" id="status-copy">Connecting to the local dataset.</p>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Primary navigation">
+          <button class="nav-btn is-active" data-page="home" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 10.5L12 3l9 7.5" />
+                <path d="M5.5 9.5V21h13V9.5" />
+              </svg>
+            </span>
+            <span class="nav-copy">
+              <strong>Home</strong>
+              <span>Overview and pulse</span>
+            </span>
+          </button>
+          <button class="nav-btn" data-page="players" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9z" />
+                <path d="M4 21a8 8 0 0116 0" />
+              </svg>
+            </span>
+            <span class="nav-copy">
+              <strong>Players</strong>
+              <span>Profiles and form</span>
+            </span>
+          </button>
+          <button class="nav-btn" data-page="matches" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 6h16" />
+                <path d="M4 12h16" />
+                <path d="M4 18h10" />
+                <path d="M18 16l2 2 3-4" />
+              </svg>
+            </span>
+            <span class="nav-copy">
+              <strong>Matches</strong>
+              <span>Schedule and scorecards</span>
+            </span>
+          </button>
+          <button class="nav-btn" data-page="compare" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5h4v14H7z" />
+                <path d="M13 9h4v10h-4z" />
+              </svg>
+            </span>
+            <span class="nav-copy">
+              <strong>Compare</strong>
+              <span>Side-by-side metrics</span>
+            </span>
+          </button>
+          <button class="nav-btn" data-page="chat" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 6.5h14A2.5 2.5 0 0121.5 9v5A2.5 2.5 0 0119 16.5H11l-4.5 3v-3H5A2.5 2.5 0 012.5 14V9A2.5 2.5 0 015 6.5z" />
+              </svg>
+            </span>
+            <span class="nav-copy">
+              <strong>Chat</strong>
+              <span>Ask the AI analyst</span>
+            </span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <button class="theme-toggle" id="theme-toggle" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v2.5" />
+                <path d="M12 18.5V21" />
+                <path d="M4.9 4.9l1.8 1.8" />
+                <path d="M17.3 17.3l1.8 1.8" />
+                <path d="M3 12h2.5" />
+                <path d="M18.5 12H21" />
+                <path d="M4.9 19.1l1.8-1.8" />
+                <path d="M17.3 6.7l1.8-1.8" />
+                <circle cx="12" cy="12" r="4" />
+              </svg>
+            </span>
+            <span class="nav-copy">
+              <strong>Theme</strong>
+              <span id="theme-toggle-label">Switch appearance</span>
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+      <div class="main-shell">
+        <header class="app-header">
+          <div class="app-header-main">
+            <button class="icon-btn mobile-only" id="mobile-menu" type="button" aria-label="Open navigation">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16" />
+                <path d="M4 12h16" />
+                <path d="M4 17h16" />
+              </svg>
+            </button>
+
+            <div>
+              <p class="eyebrow">Cricket Intelligence Console</p>
+              <h1 id="page-title">Home</h1>
+              <p class="page-subtitle" id="page-subtitle">Follow archive stats, live match pulse, and AI insights.</p>
+            </div>
+          </div>
+
+          <div class="app-header-actions">
+            <div class="header-pill" id="header-status-badge">Archive warming up</div>
+            <button class="btn btn-primary section-link" data-page-target="chat" type="button">Ask AI</button>
+          </div>
+        </header>
+
+        <main class="content-shell">
+          <section class="page is-active" id="page-home">
+            <section class="relative overflow-hidden rounded-[32px] border border-white/10 bg-slate-950 text-white shadow-glow">
+              <div class="absolute inset-0">
+                <img
+                  class="h-full w-full object-cover opacity-30"
+                  src="https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1800&q=80"
+                  alt="Cricket stadium background"
+                />
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(52,211,153,0.18),transparent_24%),linear-gradient(135deg,rgba(2,6,23,0.96),rgba(15,23,42,0.86),rgba(6,78,59,0.78))]"></div>
+                <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[length:32px_32px] animate-pulsegrid"></div>
+              </div>
+
+              <div class="relative z-10 grid gap-8 p-6 md:p-8 xl:grid-cols-[1.2fr_0.8fr] xl:items-center">
+                <div class="animate-fade-up">
+                  <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200 backdrop-blur">
+                    <span class="inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
+                    AI-Powered Cricket Intelligence
+                  </div>
+                  <h2 class="hero-title mt-5 max-w-4xl text-5xl font-bold leading-[0.95] tracking-[-0.06em] text-white md:text-6xl xl:text-7xl">
+                    Cricket Stats AI
+                  </h2>
+                  <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-200 md:text-xl">
+                    Search players, analyze matches, compare stats instantly.
+                  </p>
+                  <p class="mt-4 max-w-2xl text-base leading-8 text-slate-300">
+                    Built like a modern SaaS command center for cricket fans, analysts, and research-heavy workflows.
+                    Find player records, break down match context, and query the archive with an AI assistant.
+                  </p>
+
+                  <div class="mt-8 flex flex-wrap gap-4">
+                    <button
+                      class="inline-flex min-h-[52px] items-center justify-center rounded-full bg-white px-6 py-3 font-semibold text-slate-950 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-50"
+                      data-page-target="players"
+                      type="button"
+                    >
+                      Get Started
+                    </button>
+                    <button
+                      class="inline-flex min-h-[52px] items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 font-semibold text-white backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white/16"
+                      data-page-target="players"
+                      type="button"
+                    >
+                      Explore Players
+                    </button>
+                    <button
+                      class="inline-flex min-h-[52px] items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/10 px-6 py-3 font-semibold text-emerald-100 backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-400/20"
+                      data-page-target="chat"
+                      type="button"
+                    >
+                      Try Chat
+                    </button>
+                  </div>
+
+                  <div class="hero-chip-row mt-8" id="hero-chip-row"></div>
+                </div>
+
+                <div class="grid gap-5 animate-float">
+                  <div class="rounded-[28px] border border-white/12 bg-white/10 p-5 shadow-soft backdrop-blur-xl">
+                    <div class="flex items-center justify-between gap-4">
+                      <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">Live Command Deck</p>
+                        <h3 class="mt-2 font-display text-2xl font-semibold tracking-[-0.04em] text-white">Instant match context</h3>
+                        <p class="mt-2 text-sm leading-7 text-slate-300">
+                          Pull live or recent cricket context alongside your historical archive, without leaving the app.
+                        </p>
+                      </div>
+                      <div class="hidden h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-300 to-amber-300 md:block"></div>
+                    </div>
+                  </div>
+
+                  <div class="rounded-[28px] border border-white/12 bg-slate-950/35 p-5 shadow-soft backdrop-blur-xl">
+                    <div class="flex items-center justify-between gap-4">
+                      <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">Live Pulse</p>
+                        <p class="mt-2 text-sm leading-7 text-slate-300">
+                          Recent or live matches from the external feed when available.
+                        </p>
+                      </div>
+                      <span class="inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                        Real-time
+                      </span>
+                    </div>
+                    <div class="mt-5 stack-list" id="home-live-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="grid gap-5 rounded-[28px] border border-white/10 bg-slate-950/90 p-6 text-white shadow-soft md:p-8">
+              <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">Core Features</p>
+                  <h3 class="mt-3 font-display text-3xl font-semibold tracking-[-0.05em] text-white">
+                    Everything you need to get started
+                  </h3>
+                  <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+                    A focused landing experience with the core workflows most users need on day one.
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <article class="group rounded-[24px] border border-white/10 bg-white/[0.06] p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-300/30 hover:bg-white/[0.09]">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/12 text-emerald-200">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 21l-4.35-4.35" />
+                      <circle cx="11" cy="11" r="6" />
+                    </svg>
+                  </div>
+                  <h4 class="mt-5 font-display text-xl font-semibold tracking-[-0.04em] text-white">Player Search</h4>
+                  <p class="mt-3 text-sm leading-7 text-slate-300">
+                    Find players fast, open detailed stat cards, and review form with a clean search-first workflow.
+                  </p>
+                </article>
+
+                <article class="group rounded-[24px] border border-white/10 bg-white/[0.06] p-5 transition duration-300 hover:-translate-y-1 hover:border-sky-300/30 hover:bg-white/[0.09]">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-400/12 text-sky-200">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 5h16" />
+                      <path d="M4 12h16" />
+                      <path d="M4 19h10" />
+                    </svg>
+                  </div>
+                  <h4 class="mt-5 font-display text-xl font-semibold tracking-[-0.04em] text-white">Match Analysis</h4>
+                  <p class="mt-3 text-sm leading-7 text-slate-300">
+                    Review match summaries, innings context, top batters, and top bowlers in a single flow.
+                  </p>
+                </article>
+
+                <article class="group rounded-[24px] border border-white/10 bg-white/[0.06] p-5 transition duration-300 hover:-translate-y-1 hover:border-amber-300/30 hover:bg-white/[0.09]">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/12 text-amber-200">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M7 5h4v14H7z" />
+                      <path d="M13 9h4v10h-4z" />
+                    </svg>
+                  </div>
+                  <h4 class="mt-5 font-display text-xl font-semibold tracking-[-0.04em] text-white">Player Comparison</h4>
+                  <p class="mt-3 text-sm leading-7 text-slate-300">
+                    Compare batting and bowling metrics side by side to spot differences immediately.
+                  </p>
+                </article>
+
+                <article class="group rounded-[24px] border border-white/10 bg-white/[0.06] p-5 transition duration-300 hover:-translate-y-1 hover:border-fuchsia-300/30 hover:bg-white/[0.09]">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-fuchsia-400/12 text-fuchsia-200">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M5 6.5h14A2.5 2.5 0 0 1 21.5 9v5A2.5 2.5 0 0 1 19 16.5H11l-4.5 3v-3H5A2.5 2.5 0 0 1 2.5 14V9A2.5 2.5 0 0 1 5 6.5z" />
+                    </svg>
+                  </div>
+                  <h4 class="mt-5 font-display text-xl font-semibold tracking-[-0.04em] text-white">AI Chat Assistant</h4>
+                  <p class="mt-3 text-sm leading-7 text-slate-300">
+                    Ask natural questions and let the app combine archive stats with live cricket context.
+                  </p>
+                </article>
+              </div>
+            </section>
+
+            <section class="section-block">
+              <div class="section-head">
+                <div>
+                  <h3>Quick Stats</h3>
+                  <p class="subline">The archive at a glance.</p>
+                </div>
+              </div>
+              <div class="stats-grid" id="home-quick-stats"></div>
+            </section>
+
+            <section class="dashboard-split">
+              <div class="section-block section-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>Top Players</h3>
+                    <p class="subline">High-impact performers from the archive.</p>
+                  </div>
+                  <button class="section-link text-link" data-page-target="players" type="button">View all players</button>
+                </div>
+                <div class="card-grid card-grid-wide" id="home-top-players"></div>
+              </div>
+
+              <div class="section-block section-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>Trending Players</h3>
+                    <p class="subline">Fast-scoring and high-volume names.</p>
+                  </div>
+                </div>
+                <div class="stack-list" id="home-trending-players"></div>
+              </div>
+            </section>
+
+            <section class="section-block">
+              <div class="section-head">
+                <div>
+                  <h3>Recent Matches</h3>
+                  <p class="subline">Latest scorecards from the loaded dataset.</p>
+                </div>
+                <button class="section-link text-link" data-page-target="matches" type="button">Open matches</button>
+              </div>
+              <div class="card-grid" id="home-recent-matches"></div>
+            </section>
+          </section>
+
+          <section class="page" id="page-players">
+            <section class="section-block">
+              <div class="section-head">
+                <div>
+                  <h3>Player Archive</h3>
+                  <p class="subline">Type a player name to open a large profile automatically, then browse the full archive below.</p>
+                </div>
+                <div class="header-pill" id="players-summary">Waiting for results</div>
+              </div>
+
+              <div class="toolbar search-toolbar">
+                <label class="search-field" for="players-search">
+                  <span>Search players</span>
+                  <input id="players-search" type="text" list="player-options" placeholder="Virat Kohli, Meg Lanning, Jasprit Bumrah..." />
+                </label>
+                <button class="btn btn-primary" id="players-search-btn" type="button">Search</button>
+              </div>
+
+              <article class="detail-panel detail-panel-feature hidden" id="player-detail"></article>
+
+              <div class="card-grid card-grid-wide" id="players-list"></div>
+
+              <div class="list-feedback">
+                <span id="players-page-label"></span>
+                <div class="inline-loader hidden" id="players-loading-more">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span>Loading more players</span>
+                </div>
+              </div>
+              <div class="card-grid card-grid-wide hidden" id="players-load-more-skeletons"></div>
+              <div class="scroll-sentinel" id="players-scroll-sentinel" aria-hidden="true"></div>
+            </section>
+          </section>
+
+          <section class="page" id="page-matches">
+            <section class="section-block">
+              <div class="section-head">
+                <div>
+                  <h3>Matches</h3>
+                  <p class="subline">Filter by team or season, then open a scorecard summary.</p>
+                </div>
+                <div class="header-pill" id="matches-summary">Ready to filter</div>
+              </div>
+
+              <div class="toolbar toolbar-wrap">
+                <label class="field-group" for="matches-team-filter">
+                  <span>Team</span>
+                  <select id="matches-team-filter">
+                    <option value="">All teams</option>
+                  </select>
+                </label>
+                <label class="field-group" for="matches-season-filter">
+                  <span>Season</span>
+                  <select id="matches-season-filter">
+                    <option value="">All seasons</option>
+                  </select>
+                </label>
+                <button class="btn btn-primary" id="matches-apply-filter" type="button">Apply Filters</button>
+              </div>
+
+              <div class="card-grid" id="matches-list"></div>
+
+              <div class="pager">
+                <button class="btn btn-secondary" id="matches-prev" type="button">Previous</button>
+                <span id="matches-page-label"></span>
+                <button class="btn btn-secondary" id="matches-next" type="button">Next</button>
+              </div>
+
+              <article class="detail-panel hidden" id="match-detail"></article>
+            </section>
+          </section>
+
+          <section class="page" id="page-compare">
+            <section class="section-block">
+              <div class="section-head">
+                <div>
+                  <h3>Compare Players</h3>
+                  <p class="subline">Run a side-by-side statistical comparison from the AI query layer.</p>
+                </div>
+              </div>
+
+              <div class="compare-toolbar">
+                <label class="search-field" for="compare-player-1">
+                  <span>Player 1</span>
+                  <input id="compare-player-1" type="text" list="player-options" placeholder="Enter first player" />
+                </label>
+                <label class="search-field" for="compare-player-2">
+                  <span>Player 2</span>
+                  <input id="compare-player-2" type="text" list="player-options" placeholder="Enter second player" />
+                </label>
+                <button class="btn btn-primary" id="compare-run" type="button">Run Comparison</button>
+                <datalist id="player-options"></datalist>
+              </div>
+
+              <div id="compare-result"></div>
+            </section>
+          </section>
+
+          <section class="page" id="page-chat">
+            <section class="section-block">
+              <div class="section-head">
+                <div>
+                  <h3>Ask Cricket AI</h3>
+                  <p class="subline">Mix archive stats, vector recall, and live context in one answer stream.</p>
+                </div>
+              </div>
+
+              <div class="chip-row" id="chat-suggestions">
+                <button class="chip" data-question="Virat Kohli stats" type="button">Virat Kohli stats</button>
+                <button class="chip" data-question="Top run scorers in 2024" type="button">Top run scorers</button>
+                <button class="chip" data-question="India vs Australia head to head" type="button">Head to head</button>
+                <button class="chip" data-question="Show recent live scores" type="button">Live scores</button>
+              </div>
+
+              <div class="chat-box" id="chat-messages"></div>
+
+              <form class="chat-input" id="chat-form">
+                <label class="search-field" for="chat-question">
+                  <span>Question</span>
+                  <input
+                    id="chat-question"
+                    type="text"
+                    placeholder="Ask about a player, team, match, live score, or comparison..."
+                    autocomplete="off"
+                    required
+                  />
+                </label>
+                <button class="btn btn-primary" id="chat-send" type="submit">Send</button>
+              </form>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
