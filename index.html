@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0f1115" />
-    <title>Cricket Stats AI</title>
+    <title>Cricket Analytics Broadcast</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,60 +15,62 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="chat-sidebar">
-        <div class="sidebar-panel">
+      <aside class="chat-sidebar" aria-label="Conversational command center">
+        <div class="sidebar-shell">
           <header class="sidebar-header">
-            <div class="brand-lockup">
-              <span class="brand-badge">CS</span>
-              <div>
-                <p class="eyebrow">Conversational Command Center</p>
-                <h1 class="brand-title">Cricket Stats AI</h1>
-              </div>
-            </div>
-
-            <div class="archive-status glass-card">
-              <div class="status-row">
-                <span class="status-dot" aria-hidden="true"></span>
-                <span class="status-pill" id="dataset-status-pill">Archive warming</span>
-              </div>
-              <p class="status-copy" id="dataset-status-copy">Connecting to the local archive and live cricket feeds.</p>
+            <div class="brand-mark" aria-hidden="true">CS</div>
+            <div class="brand-copy">
+              <p class="eyebrow">Conversational Command Center</p>
+              <h1 class="brand-title">Cricket Analytics Broadcast</h1>
+              <p class="brand-subtitle">Natural language controls the entire analysis canvas.</p>
             </div>
           </header>
 
-          <section class="starter-panel glass-card" aria-labelledby="quick-prompts-title">
-            <div class="panel-head">
+          <section class="status-panel frosted-panel" aria-labelledby="status-title">
+            <div class="panel-heading compact">
               <div>
-                <p class="eyebrow">Prompt Deck</p>
-                <h2 id="quick-prompts-title">Quick Commands</h2>
+                <p class="eyebrow">Archive Telemetry</p>
+                <h2 class="panel-title" id="status-title">System Readiness</h2>
               </div>
+              <span class="status-badge" id="dataset-status-pill">Archive warming</span>
             </div>
-            <div class="starter-chip-grid" id="starter-chips"></div>
+            <p class="panel-copy" id="dataset-status-copy">Connecting to the local archive and live cricket feeds.</p>
           </section>
 
-          <section class="chat-thread-shell glass-card" aria-labelledby="chat-thread-title">
-            <div class="panel-head">
+          <section class="prompt-panel frosted-panel" aria-labelledby="prompts-title">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Prompt Deck</p>
+                <h2 class="panel-title" id="prompts-title">Quick Commands</h2>
+              </div>
+            </div>
+            <div class="chip-row" id="starter-chips"></div>
+          </section>
+
+          <section class="chat-panel frosted-panel" aria-labelledby="relay-title">
+            <div class="panel-heading">
               <div>
                 <p class="eyebrow">Live Query Feed</p>
-                <h2 id="chat-thread-title">Analyst Relay</h2>
+                <h2 class="panel-title" id="relay-title">Analyst Relay</h2>
               </div>
             </div>
             <div class="chat-thread" id="chat-thread"></div>
           </section>
 
-          <form class="chat-composer glass-card" id="chat-form">
+          <form class="chat-composer frosted-panel" id="chat-form">
             <label class="composer-field" for="chat-input">
               <span class="composer-label">Natural Language Control</span>
               <textarea
                 id="chat-input"
                 rows="1"
-                placeholder="Ask for a player profile, a match story, a team snapshot, or a direct comparison..."
+                placeholder="Ask for a player profile, comparison, team snapshot, match story, or live update..."
                 autocomplete="off"
                 required
               ></textarea>
             </label>
             <div class="composer-footer">
-              <p class="composer-hint">The right canvas reacts to the context of this conversation.</p>
-              <button class="send-button" id="send-button" type="submit">Launch Query</button>
+              <p class="composer-hint">Each prompt rebuilds the right-side stage with a contextual analytics scene.</p>
+              <button class="send-button" id="send-button" type="submit">Map Signal</button>
             </div>
           </form>
         </div>
@@ -81,8 +83,8 @@
         </button>
 
         <div class="canvas-shell">
-          <header class="canvas-header" id="stage-header"></header>
-          <section class="canvas-body" id="stage-content" aria-live="polite"></section>
+          <header class="stage-header frosted-panel" id="stage-header"></header>
+          <section class="stage-scroll frosted-panel" id="stage-content" aria-live="polite"></section>
         </div>
       </main>
     </div>
