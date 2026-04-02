@@ -3,92 +3,47 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0f1115" />
-    <title>Cricket Analytics Broadcast</title>
+    <meta name="theme-color" content="#04110d" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Cricket AI Assistant</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              cricket: '#00ff9c',
+              ink: '#050816',
+              panel: '#0d1424',
+              shell: '#10192d'
+            },
+            boxShadow: {
+              glow: '0 0 0 1px rgba(0, 255, 156, 0.16), 0 18px 44px rgba(0, 0, 0, 0.38)'
+            }
+          }
+        }
+      };
+    </script>
     <link rel="stylesheet" href="styles.css" />
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="chat-sidebar" aria-label="Conversational command center">
-        <div class="sidebar-shell">
-          <header class="sidebar-header">
-            <div class="brand-mark" aria-hidden="true">CS</div>
-            <div class="brand-copy">
-              <p class="eyebrow">Conversational Command Center</p>
-              <h1 class="brand-title">Cricket Analytics Broadcast</h1>
-              <p class="brand-subtitle">Natural language controls the entire analysis canvas.</p>
-            </div>
-          </header>
+    <div id="root"></div>
 
-          <section class="status-panel frosted-panel" aria-labelledby="status-title">
-            <div class="panel-heading compact">
-              <div>
-                <p class="eyebrow">Archive Telemetry</p>
-                <h2 class="panel-title" id="status-title">System Readiness</h2>
-              </div>
-              <span class="status-badge" id="dataset-status-pill">Archive warming</span>
-            </div>
-            <p class="panel-copy" id="dataset-status-copy">Connecting to the local archive and live cricket feeds.</p>
-          </section>
-
-          <section class="prompt-panel frosted-panel" aria-labelledby="prompts-title">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Prompt Deck</p>
-                <h2 class="panel-title" id="prompts-title">Quick Commands</h2>
-              </div>
-            </div>
-            <div class="chip-row" id="starter-chips"></div>
-          </section>
-
-          <section class="chat-panel frosted-panel" aria-labelledby="relay-title">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Live Query Feed</p>
-                <h2 class="panel-title" id="relay-title">Analyst Relay</h2>
-              </div>
-            </div>
-            <div class="chat-thread" id="chat-thread"></div>
-          </section>
-
-          <form class="chat-composer frosted-panel" id="chat-form">
-            <label class="composer-field" for="chat-input">
-              <span class="composer-label">Natural Language Control</span>
-              <textarea
-                id="chat-input"
-                rows="1"
-                placeholder="Ask for a player profile, comparison, team snapshot, match story, or live update..."
-                autocomplete="off"
-                required
-              ></textarea>
-            </label>
-            <div class="composer-footer">
-              <p class="composer-hint">Each prompt rebuilds the right-side stage with a contextual analytics scene.</p>
-              <button class="send-button" id="send-button" type="submit">Map Signal</button>
-            </div>
-          </form>
-        </div>
-      </aside>
-
-      <main class="dynamic-canvas" id="dynamic-canvas">
-        <button class="mobile-stage-back" id="mobile-stage-back" type="button">
-          <span class="mobile-stage-handle" aria-hidden="true"></span>
-          Back to Chat
-        </button>
-
-        <div class="canvas-shell">
-          <header class="stage-header frosted-panel" id="stage-header"></header>
-          <section class="stage-scroll frosted-panel" id="stage-content" aria-live="polite"></section>
-        </div>
-      </main>
-    </div>
-
-    <script src="script.js"></script>
+    <script type="text/babel" data-presets="react" src="components/Header.jsx?v=20260402"></script>
+    <script type="text/babel" data-presets="react" src="components/ChatWindow.jsx?v=20260402"></script>
+    <script type="text/babel" data-presets="react" src="components/InputBox.jsx?v=20260402"></script>
+    <script type="text/babel" data-presets="react" src="pages/Home.jsx?v=20260402"></script>
+    <script type="text/babel" data-presets="react" src="app.jsx?v=20260402"></script>
   </body>
 </html>

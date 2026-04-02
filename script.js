@@ -1,5 +1,3 @@
-const imageCache = new Map();
-
 const STARTER_PROMPTS = [
   'Virat Kohli stats',
   'Compare Virat Kohli vs Rohit Sharma',
@@ -9,45 +7,32 @@ const STARTER_PROMPTS = [
   'Top run scorers in 2024'
 ];
 
-const state = {
-  status: null,
-  home: null,
-  live: [],
-  lastPayload: null,
-  pollTimer: null,
-  hasAskedQuestion: false,
-  isQuerying: false,
-  activeRequestId: 0
-};
-
 const elements = {
   starterChips: document.querySelector('#starter-chips'),
-  chatThread: document.querySelector('#chat-thread'),
   chatForm: document.querySelector('#chat-form'),
   chatInput: document.querySelector('#chat-input'),
   sendButton: document.querySelector('#send-button'),
-  stageHeader: document.querySelector('#stage-header'),
-  stageContent: document.querySelector('#stage-content'),
   statusPill: document.querySelector('#dataset-status-pill'),
   statusCopy: document.querySelector('#dataset-status-copy'),
   mobileBack: document.querySelector('#mobile-stage-back')
 };
 
-function safeText(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+function cloneTemplate(templateId) {
+  const template = document.querySelector(`#${templateId}`);
+  if (!template) {
+    throw new Error(`Missing template: ${templateId}`);
+  }
+  return template.content.cloneNode(true);
+}
+
+function createElement(tagName, classNames = []) {
+  const node = document.createElement(tagName);
+  classNames.filter(Boolean).forEach((className) => node.classList.add(className));
+  return node;
 }
 
 function toArray(value) {
   return Array.isArray(value) ? value : [];
-}
-
-function delayStyle(value = 0) {
-  return ` style="--delay:${Number(value || 0).toFixed(2)}s"`;
 }
 
 function formatNumber(value) {
@@ -65,10 +50,6 @@ function formatDecimal(value, digits = 2) {
   return Number(value || 0).toFixed(digits);
 }
 
-function formatPercent(value, digits = 1) {
-  return `${Number(value || 0).toFixed(digits)}%`;
-}
-
 function formatDate(value = '') {
   if (!value) return 'Date unavailable';
   const parsed = new Date(value);
@@ -78,10 +59,6 @@ function formatDate(value = '') {
     month: 'short',
     year: 'numeric'
   });
-}
-
-function fallbackAvatarUrl(name = 'Cricket Player') {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=00e676&color=08110d&bold=true&size=256&format=png`;
 }
 
 function detailData(payload = {}) {
@@ -106,6 +83,7 @@ function statusMeta(status = {}) {
 
   if (source.status === 'ready') {
     return {
+      phase: 'ready',
       pill: 'Archive live',
       copy: 'The local archive is indexed and ready for full analytics.',
       chip: 'Archive ready'
@@ -114,6 +92,7 @@ function statusMeta(status = {}) {
 
   if (source.status === 'error') {
     return {
+      phase: 'error',
       pill: 'Archive error',
       copy: source.error || 'The archive failed to initialize.',
       chip: 'Offline'
@@ -122,6 +101,7 @@ function statusMeta(status = {}) {
 
   if (source.status === 'loading') {
     return {
+      phase: 'loading',
       pill: 'Archive warming',
       copy: rows
         ? `${formatNumber(rows)} rows indexed so far.`
@@ -131,1047 +111,618 @@ function statusMeta(status = {}) {
   }
 
   return {
+    phase: 'connecting',
     pill: 'Connecting',
     copy: 'Connecting to the local archive and live cricket feeds.',
     chip: 'Linking'
   };
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.message || payload.summary || 'Request failed.');
+function createReactiveStore(initialState = {}) {
+  const emitter = new EventTarget();
+  const proxyCache = new WeakMap();
+  const rawCache = new WeakMap();
+  const pendingEvents = new Map();
+  let flushScheduled = false;
+
+  function pathToString(parts = []) {
+    return parts.filter((part) => part !== '').join('.');
   }
-  return payload;
-}
 
-async function fetchPlayerImage(playerName = '') {
-  const cleanName = String(playerName || '').trim();
-  const cacheKey = cleanName.toLowerCase();
-  const fallback = fallbackAvatarUrl(cleanName || 'Cricket Player');
-
-  if (!cleanName) return fallback;
-  if (imageCache.has(cacheKey)) return imageCache.get(cacheKey);
-
-  const pendingRequest = (async () => {
-    try {
-      const searchPayload = await fetchJson(
-        `https://en.wikipedia.org/w/api.php?origin=*&action=query&list=search&format=json&srlimit=1&srsearch=${encodeURIComponent(`${cleanName} cricketer`)}`
-      );
-      const pageId = searchPayload?.query?.search?.[0]?.pageid;
-      if (!pageId) return fallback;
-
-      const imagePayload = await fetchJson(
-        `https://en.wikipedia.org/w/api.php?origin=*&action=query&prop=pageimages&piprop=original&pageids=${encodeURIComponent(String(pageId))}&format=json`
-      );
-      const pages = imagePayload?.query?.pages || {};
-      const page = pages[String(pageId)] || Object.values(pages)[0] || {};
-      return page?.original?.source || page?.thumbnail?.source || fallback;
-    } catch (error) {
-      return fallback;
-    }
-  })();
-
-  imageCache.set(cacheKey, pendingRequest);
-  const resolvedUrl = await pendingRequest;
-  imageCache.set(cacheKey, resolvedUrl);
-  return resolvedUrl;
-}
-
-function isStaleRequest(requestId) {
-  return requestId !== state.activeRequestId;
-}
-
-function renderChipButtons(items = [], className = 'chip') {
-  if (!items.length) return '';
-  return `
-    <div class="chip-row">
-      ${items
-        .map(
-          (item) =>
-            `<button class="${safeText(className)}" type="button" data-question="${safeText(item)}">${safeText(item)}</button>`
-        )
-        .join('')}
-    </div>
-  `;
-}
-
-function renderEntityPortrait(name = 'Cricket', imageUrl = '', altSuffix = 'portrait') {
-  const source = imageUrl || fallbackAvatarUrl(name);
-  return `
-    <div class="entity-portrait">
-      <img
-        src="${safeText(source)}"
-        alt="${safeText(`${name} ${altSuffix}`)}"
-        loading="lazy"
-        decoding="async"
-        referrerpolicy="no-referrer"
-      />
-    </div>
-  `;
-}
-
-function renderStatCard(label, value, note = '', options = {}) {
-  const toneClass = options.tone ? ` ${options.tone}` : '';
-  return `
-    <article class="stat-card${toneClass} animate-slide-up"${delayStyle(options.delay || 0)}>
-      <p class="stat-label">${safeText(label)}</p>
-      <div class="stat-value">${safeText(value)}</div>
-      ${note ? `<p class="stat-note">${safeText(note)}</p>` : ''}
-    </article>
-  `;
-}
-
-function renderStatFlex(items = [], startDelay = 0.04, step = 0.06) {
-  return `
-    <div class="stat-flex">
-      ${items
-        .map((item, index) =>
-          renderStatCard(item.label, item.value, item.note || '', {
-            tone: item.tone || '',
-            delay: startDelay + index * step
+  function scheduleEmit(detail) {
+    pendingEvents.set(detail.path, detail);
+    if (flushScheduled) return;
+    flushScheduled = true;
+    queueMicrotask(() => {
+      flushScheduled = false;
+      const events = [...pendingEvents.values()];
+      pendingEvents.clear();
+      events.forEach((entry) => {
+        emitter.dispatchEvent(
+          new CustomEvent('statechange', {
+            detail: entry
           })
-        )
-        .join('')}
-    </div>
-  `;
-}
-
-function renderSignalRows(items = [], startDelay = 0.08) {
-  if (!items.length) {
-    return '<p class="empty-copy">No signal rows were returned for this query.</p>';
-  }
-
-  return `
-    <div class="stage-panel-grid">
-      ${items
-        .map((item, index) => {
-          const value =
-            item.left !== undefined || item.right !== undefined
-              ? `${item.left ?? '-'} / ${item.right ?? '-'}`
-              : item.value ?? '-';
-          return `
-            <article class="signal-row animate-slide-up"${delayStyle(startDelay + index * 0.06)}>
-              <p class="stat-label">${safeText(item.label || 'Signal')}</p>
-              <div class="signal-value">${safeText(value)}</div>
-            </article>
-          `;
-        })
-        .join('')}
-    </div>
-  `;
-}
-
-function renderSectionPanel({ kicker, title, copy = '', body = '', delay = 0, classes = '' }) {
-  return `
-    <section class="stage-panel ${safeText(classes)} animate-slide-up"${delayStyle(delay)}>
-      <div class="section-heading">
-        <p class="section-kicker">${safeText(kicker)}</p>
-        <h3 class="section-title">${safeText(title)}</h3>
-        ${copy ? `<p class="section-copy">${safeText(copy)}</p>` : ''}
-      </div>
-      ${body}
-    </section>
-  `;
-}
-
-function renderInsightsPanel(payload = {}, delay = 0.16) {
-  const insights = toArray(payload.insights).filter(Boolean);
-  const suggestions = suggestionsFromPayload(payload);
-  const body = insights.length
-    ? `
-        <div class="stage-panel-grid">
-          ${insights
-            .map(
-              (item, index) => `
-                <article class="signal-row animate-slide-up"${delayStyle(delay + 0.04 + index * 0.06)}>
-                  <p class="stat-label">Insight ${index + 1}</p>
-                  <p class="list-subcopy">${safeText(item)}</p>
-                </article>
-              `
-            )
-            .join('')}
-        </div>
-        ${suggestions.length ? renderChipButtons(suggestions, 'chip') : ''}
-      `
-    : `
-        <p class="empty-copy">No additional insights were returned for this response.</p>
-        ${suggestions.length ? renderChipButtons(suggestions, 'chip') : ''}
-      `;
-
-  return renderSectionPanel({
-    kicker: 'Analyst Readout',
-    title: 'Insights',
-    copy: 'Contextual cues generated from the active query.',
-    body,
-    delay
-  });
-}
-
-function renderKeyStatsPanel(payload = {}, title = 'Signal Board', delay = 0.12) {
-  const keyStats = toArray(payload.key_stats);
-  return renderSectionPanel({
-    kicker: 'Payload',
-    title,
-    copy: 'Structured signals returned directly by the backend.',
-    body: renderSignalRows(keyStats, delay + 0.04),
-    delay
-  });
-}
-
-function renderMatchCard(match = {}, delay = 0.1) {
-  const chips = [];
-  if (match.match_type) chips.push(`<span class="match-chip">${safeText(match.match_type)}</span>`);
-  if (match.venue) chips.push(`<span class="match-chip">${safeText(match.venue)}</span>`);
-  if (match.winner) chips.push(`<span class="match-chip">${safeText(`Winner: ${match.winner}`)}</span>`);
-
-  if (Array.isArray(match.score)) {
-    match.score.forEach((row) => {
-      const wickets = row.wickets === null || row.wickets === undefined ? '-' : row.wickets;
-      const overs = row.overs === null || row.overs === undefined ? '-' : row.overs;
-      chips.push(
-        `<span class="match-chip">${safeText(`${row.inning || 'Innings'} ${row.runs || 0}/${wickets} (${overs})`)}</span>`
-      );
+        );
+      });
     });
   }
 
-  return `
-    <article class="match-card animate-slide-up"${delayStyle(delay)}>
-      <div class="match-head">
-        <div class="match-main">
-          <p class="list-title">${safeText(match.name || 'Match')}</p>
-          <p class="list-subcopy">${safeText(formatDate(match.date || ''))}</p>
-        </div>
-      </div>
-      ${chips.length ? `<div class="stage-chip-row">${chips.join('')}</div>` : ''}
-      ${
-        match.summary || match.status
-          ? `<p class="list-subcopy">${safeText(match.summary || match.status)}</p>`
-          : ''
+  function unwrap(value) {
+    return rawCache.get(value) || value;
+  }
+
+  function proxify(target, path = []) {
+    if (!target || typeof target !== 'object') return target;
+    const rawTarget = unwrap(target);
+    if (proxyCache.has(rawTarget)) return proxyCache.get(rawTarget);
+
+    const proxy = new Proxy(rawTarget, {
+      get(currentTarget, property, receiver) {
+        const value = Reflect.get(currentTarget, property, receiver);
+        return proxify(value, [...path, property]);
+      },
+      set(currentTarget, property, nextValue, receiver) {
+        const previousValue = currentTarget[property];
+        const rawNextValue = unwrap(nextValue);
+        const didSet = Reflect.set(currentTarget, property, rawNextValue, receiver);
+        if (!didSet || Object.is(previousValue, rawNextValue)) return didSet;
+
+        scheduleEmit({
+          path: pathToString([...path, property]),
+          value: rawNextValue,
+          previousValue
+        });
+        return didSet;
+      },
+      deleteProperty(currentTarget, property) {
+        const previousValue = currentTarget[property];
+        const didDelete = Reflect.deleteProperty(currentTarget, property);
+        if (!didDelete) return didDelete;
+
+        scheduleEmit({
+          path: pathToString([...path, property]),
+          value: undefined,
+          previousValue
+        });
+        return didDelete;
       }
-    </article>
-  `;
+    });
+
+    proxyCache.set(rawTarget, proxy);
+    rawCache.set(proxy, rawTarget);
+    return proxy;
+  }
+
+  function matchesPath(subscriptionPath = '', eventPath = '') {
+    if (!subscriptionPath) return true;
+    if (subscriptionPath === eventPath) return true;
+    return eventPath.startsWith(`${subscriptionPath}.`);
+  }
+
+  function subscribe(subscriptionPath, listener) {
+    const handler = (event) => {
+      const detail = event.detail || {};
+      if (!matchesPath(subscriptionPath, detail.path || '')) return;
+      listener(detail);
+    };
+
+    emitter.addEventListener('statechange', handler);
+    return () => emitter.removeEventListener('statechange', handler);
+  }
+
+  return {
+    state: proxify(initialState),
+    subscribe
+  };
 }
 
-function renderMatchesPanel(matches = [], title = 'Match Tape', copy = 'Relevant matches for the current view.', delay = 0.14) {
-  const body = matches.length
-    ? `<div class="match-grid">${matches
-        .map((match, index) => renderMatchCard(match, delay + 0.04 + index * 0.06))
-        .join('')}</div>`
-    : '<p class="empty-copy">No match cards are available for this response yet.</p>';
+const { state, subscribe } = createReactiveStore({
+  starterPrompts: [...STARTER_PROMPTS],
+  chatHistory: [],
+  canvasLayout: {},
+  connectionStatus: statusMeta({}),
+  archiveStatus: null,
+  homeData: null,
+  liveData: [],
+  sessionId: '',
+  hasAskedQuestion: false,
+  isQuerying: false,
+  activeRequestId: 0,
+  pollTimer: null
+});
 
-  return renderSectionPanel({
-    kicker: 'Tape',
-    title,
-    copy,
-    body,
-    delay
-  });
+function createChipButton(question = '') {
+  const button = createElement('button', ['chip']);
+  button.type = 'button';
+  button.dataset.question = question;
+  button.textContent = question;
+  return button;
 }
 
-function renderLeaderboardPanel(rows = [], title = 'Leaderboard', copy = 'Ranked performers in the active scope.', delay = 0.12) {
-  const body = rows.length
-    ? `
-        <div class="list-grid">
-          ${rows
-            .map(
-              (row, index) => `
-                <article class="list-row animate-slide-up"${delayStyle(delay + 0.04 + index * 0.06)}>
-                  <div class="leader-main">
-                    <p class="list-title">${safeText(row.player || row.name || 'Player')}</p>
-                    <p class="list-subcopy">${safeText(row.team || row.country || 'Archive')}</p>
-                  </div>
-                  <div>
-                    <div class="list-rank">#${safeText(row.rank ?? index + 1)}</div>
-                    <p class="list-subcopy">${safeText(row.value ?? '-')}</p>
-                  </div>
-                </article>
-              `
-            )
-            .join('')}
-        </div>
-      `
-    : '<p class="empty-copy">No ranked rows were returned.</p>';
-
-  return renderSectionPanel({
-    kicker: 'Ranking',
-    title,
-    copy,
-    body,
-    delay
-  });
+function createChipRow(items = []) {
+  const row = createElement('div', ['chip-row']);
+  items.filter(Boolean).forEach((item) => row.append(createChipButton(item)));
+  return row;
 }
 
-function renderCanvasHeader({ eyebrow = 'Omni-Channel Canvas', title = 'Cricket Analytics Broadcast', subtitle = '', chips = [] } = {}) {
-  const statusChip = statusMeta(state.status).chip;
-  const allChips = [statusChip, ...chips].filter(Boolean);
-  elements.stageHeader.innerHTML = `
-    <div class="stage-heading">
-      <p class="eyebrow">${safeText(eyebrow)}</p>
-      <h2 class="stage-title">${safeText(title)}</h2>
-      ${subtitle ? `<p class="stage-subtitle">${safeText(subtitle)}</p>` : ''}
-    </div>
-    ${allChips.length ? `<div class="stage-chip-row">${allChips.map((chip) => `<span class="stage-chip">${safeText(chip)}</span>`).join('')}</div>` : ''}
-  `;
+function createTypingIndicator() {
+  const indicator = createElement('div', ['typing-indicator']);
+  const label = createElement('span', ['typing-label']);
+  label.textContent = 'PROCESSING SIGNAL';
+  const cursor = createElement('span', ['typing-cursor']);
+  cursor.textContent = '_';
+  indicator.append(label, cursor);
+  return indicator;
 }
 
-function setCanvasBody(html = '') {
-  elements.stageContent.innerHTML = html;
-  elements.stageContent.setAttribute('aria-busy', 'false');
+function buildSectionShell({ kicker = '', title = '', copy = '', classes = [] } = {}) {
+  const section = createElement('section', ['stage-panel', ...classes]);
+  const heading = createElement('div', ['section-heading']);
+  const kickerNode = createElement('p', ['section-kicker']);
+  kickerNode.textContent = kicker;
+  const titleNode = createElement('h3', ['section-title']);
+  titleNode.textContent = title;
+  heading.append(kickerNode, titleNode);
+
+  if (copy) {
+    const copyNode = createElement('p', ['section-copy']);
+    copyNode.textContent = copy;
+    heading.append(copyNode);
+  }
+
+  const body = createElement('div');
+  section.append(heading, body);
+  return { section, body };
 }
 
-function renderStageSkeleton(question = '') {
-  renderCanvasHeader({
-    eyebrow: 'Analytics Canvas',
-    title: 'Resolving Query',
-    subtitle: question || 'Interpreting the prompt and composing the next stage.'
-  });
+function createMatchCard(match = {}) {
+  const card = createElement('article', ['match-card']);
+  const head = createElement('div', ['match-head']);
+  const main = createElement('div', ['match-main']);
+  const title = createElement('p', ['list-title']);
+  title.textContent = match.name || 'Match';
+  const date = createElement('p', ['list-subcopy']);
+  date.textContent = formatDate(match.date || '');
+  main.append(title, date);
+  head.append(main);
+  card.append(head);
 
-  setCanvasBody(`
-    <div class="skeleton-shell">
-      <div class="skeleton-hero">
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-      </div>
-      <div class="skeleton-grid">
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-      </div>
-      <div class="stage-panel">
-        <div class="chip-row">
-          <div class="skeleton-chip"></div>
-          <div class="skeleton-chip"></div>
-          <div class="skeleton-chip"></div>
-        </div>
-        <div class="stage-panel-grid" style="margin-top:18px;">
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line" style="width:82%;"></div>
-          <div class="skeleton-line" style="width:92%;"></div>
-        </div>
-      </div>
-    </div>
-  `);
-  elements.stageContent.setAttribute('aria-busy', 'true');
-}
+  const chips = [];
+  if (match.match_type) chips.push(match.match_type);
+  if (match.venue) chips.push(match.venue);
+  if (match.winner) chips.push(`Winner: ${match.winner}`);
 
-function renderBootStage() {
-  const meta = statusMeta(state.status);
-  renderCanvasHeader({
-    eyebrow: 'Omni-Channel Canvas',
-    title: 'Broadcast stage warming',
-    subtitle: 'Natural language controls will take over as soon as the archive is ready.',
-    chips: [meta.pill]
+  toArray(match.score).forEach((row) => {
+    const wickets = row.wickets === null || row.wickets === undefined ? '-' : row.wickets;
+    const overs = row.overs === null || row.overs === undefined ? '-' : row.overs;
+    chips.push(`${row.inning || 'Innings'} ${row.runs || 0}/${wickets} (${overs})`);
   });
 
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <p class="stage-kicker">System Bring-Up</p>
-            <h3 class="hero-title">Stadium Night signal path is online</h3>
-            <p class="hero-summary">${safeText(meta.copy)}</p>
-            ${renderChipButtons(STARTER_PROMPTS.slice(0, 4), 'chip')}
-          </div>
-          ${renderStatFlex(
-            [
-              { label: 'Status', value: meta.pill, note: 'Archive readiness', tone: 'highlight' },
-              { label: 'Rows', value: formatCompact(state.status?.rows_processed || 0), note: 'Indexed so far' },
-              { label: 'Control', value: 'Chat', note: 'Primary command surface' },
-              { label: 'Theme', value: 'Night', note: 'Broadcast interface' }
-            ],
-            0.06
-          )}
-        </div>
-      </section>
-      <section class="stage-panel empty-state animate-slide-up"${delayStyle(0.18)}>
-        <h3 class="empty-title">Awaiting first command</h3>
-        <p class="empty-copy">Ask for a player, a team, a match, or a comparison to generate the first analytics composition.</p>
-      </section>
-    </div>
-  `);
+  if (chips.length) {
+    const chipRow = createElement('div', ['stage-chip-row']);
+    chips.forEach((chip) => {
+      const chipNode = createElement('span', ['match-chip']);
+      chipNode.textContent = chip;
+      chipRow.append(chipNode);
+    });
+    card.append(chipRow);
+  }
+
+  const summary = match.summary || match.status;
+  if (summary) {
+    const copy = createElement('p', ['list-subcopy']);
+    copy.textContent = summary;
+    card.append(copy);
+  }
+
+  return card;
 }
 
-function renderLandingStage() {
-  const home = state.home || {};
-  const quickStats = home.quick_stats || {};
-  const topPlayers = toArray(home.top_players).slice(0, 6);
-  const recentMatches = toArray(home.recent_matches).slice(0, 4);
-  const liveItems = toArray(state.live).slice(0, 4);
+function createLeaderboardRow(row = {}, index = 0) {
+  const card = createElement('article', ['list-row']);
+  const left = createElement('div', ['leader-main']);
+  const title = createElement('p', ['list-title']);
+  title.textContent = row.player || row.name || 'Player';
+  const subtitle = createElement('p', ['list-subcopy']);
+  subtitle.textContent = row.team || row.country || 'Archive';
+  left.append(title, subtitle);
 
-  renderCanvasHeader({
-    eyebrow: 'Omni-Channel Canvas',
-    title: 'Command the field with language',
-    subtitle: 'Use the left command center to summon player stories, live surfaces, and comparison scenes.',
-    chips: ['Canvas online', liveItems.length ? `${liveItems.length} live feeds` : 'Archive-first mode']
-  });
+  const right = createElement('div');
+  const rank = createElement('div', ['list-rank']);
+  rank.textContent = `#${row.rank ?? index + 1}`;
+  const value = createElement('p', ['list-subcopy']);
+  value.textContent = String(row.value ?? '-');
+  right.append(rank, value);
 
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <p class="stage-kicker">Opening Feed</p>
-            <h3 class="hero-title">One canvas. Every cricket question.</h3>
-            <p class="hero-summary">
-              This stage is built around natural language resolution. Ask for player stats, match stories, team form,
-              live updates, or side-by-side comparisons and the canvas will rebuild around that intent.
-            </p>
-            ${renderChipButtons(STARTER_PROMPTS, 'chip')}
-          </div>
-          ${renderStatFlex(
-            [
-              { label: 'Matches', value: formatCompact(quickStats.matches || 0), note: 'Archive footprint', tone: 'highlight' },
-              { label: 'Players', value: formatCompact(quickStats.players || 0), note: 'Profiles in scope' },
-              { label: 'Teams', value: formatCompact(quickStats.teams || 0), note: 'Competitive entities' },
-              { label: 'Seasons', value: quickStats.seasons || 'N/A', note: 'Coverage window' }
-            ],
-            0.06
-          )}
-        </div>
-      </section>
-      <div class="stage-section-grid">
-        ${renderLeaderboardPanel(
-          topPlayers.map((player, index) => ({
-            rank: index + 1,
-            player: player.name,
-            team: player.team,
-            value: `${formatNumber(player.runs || 0)} runs`
-          })),
-          'Featured Batters',
-          'High-output names currently loaded into the archive.',
-          0.12
-        )}
-        ${renderMatchesPanel(
-          liveItems.length ? liveItems : recentMatches,
-          liveItems.length ? 'Live Signal' : 'Recent Archive Tape',
-          liveItems.length
-            ? 'Live or recent feed items from the connected match provider.'
-            : 'Latest archived matches available locally.',
-          0.18
-        )}
-      </div>
-    </div>
-  `);
+  card.append(left, right);
+  return card;
 }
 
-function renderPerformerPanel(title, copy, rows = [], formatter, delay = 0.12) {
-  const body = rows.length
-    ? `
-        <div class="list-grid">
-          ${rows
-            .map(
-              (row, index) => `
-                <article class="list-row animate-slide-up"${delayStyle(delay + 0.04 + index * 0.06)}>
-                  <div class="leader-main">
-                    <p class="list-title">${safeText(row.name || row.player || 'Performer')}</p>
-                    <p class="list-subcopy">${safeText(formatter(row))}</p>
-                  </div>
-                </article>
-              `
-            )
-            .join('')}
-        </div>
-      `
-    : '<p class="empty-copy">No performer rows were returned.</p>';
+function renderWidget(widget = {}) {
+  if (!widget || !widget.type) return createElement('div');
 
-  return renderSectionPanel({
-    kicker: 'Performance',
-    title,
-    copy,
-    body,
-    delay
-  });
+  if (widget.type === 'live_match_banner') {
+    const banner = document.createElement('live-match-banner');
+    banner.widget = widget;
+    return banner;
+  }
+
+  if (widget.type === 'stat_grid') {
+    const grid = createElement('div', ['stat-flex']);
+    toArray(widget.items).forEach((item) => {
+      const card = document.createElement('stat-card');
+      card.widget = item;
+      grid.append(card);
+    });
+    return grid;
+  }
+
+  if (widget.type === 'empty_state') {
+    const section = createElement('section', ['stage-panel', 'empty-state']);
+    const title = createElement('h3', ['empty-title']);
+    title.textContent = widget.title || 'Nothing to show';
+    const copy = createElement('p', ['empty-copy']);
+    copy.textContent = widget.copy || 'No canvas widgets are available.';
+    section.append(title, copy);
+    if (toArray(widget.actions).length) {
+      section.append(createChipRow(widget.actions));
+    }
+    return section;
+  }
+
+  if (widget.type === 'message_panel') {
+    const { section, body } = buildSectionShell({
+      kicker: widget.kicker || 'Summary',
+      title: widget.title || 'Cricket Intelligence',
+      copy: widget.copy || ''
+    });
+    const summary = createElement('p', ['hero-summary']);
+    summary.textContent = widget.summary || 'No summary available.';
+    body.append(summary);
+    if (toArray(widget.actions).length) {
+      body.append(createChipRow(widget.actions));
+    }
+    return section;
+  }
+
+  if (widget.type === 'leaderboard') {
+    const { section, body } = buildSectionShell({
+      kicker: widget.kicker || 'Ranking',
+      title: widget.title || 'Leaderboard',
+      copy: widget.copy || ''
+    });
+    const grid = createElement('div', ['list-grid']);
+    const rows = toArray(widget.rows);
+    if (rows.length) {
+      rows.forEach((row, index) => grid.append(createLeaderboardRow(row, index)));
+    } else {
+      const empty = createElement('p', ['empty-copy']);
+      empty.textContent = 'No ranked rows were returned.';
+      grid.append(empty);
+    }
+    body.append(grid);
+    return section;
+  }
+
+  if (widget.type === 'match_list') {
+    const { section, body } = buildSectionShell({
+      kicker: widget.kicker || 'Tape',
+      title: widget.title || 'Match Tape',
+      copy: widget.copy || ''
+    });
+    const grid = createElement('div', ['match-grid']);
+    const matches = toArray(widget.matches);
+    if (matches.length) {
+      matches.forEach((match) => grid.append(createMatchCard(match)));
+    } else {
+      const empty = createElement('p', ['empty-copy']);
+      empty.textContent = 'No match cards are available for this response yet.';
+      grid.append(empty);
+    }
+    body.append(grid);
+    return section;
+  }
+
+  if (widget.type === 'comparison_group') {
+    const { section, body } = buildSectionShell({
+      kicker: widget.kicker || 'Comparison',
+      title: widget.title || 'Comparison',
+      copy: widget.copy || ''
+    });
+    const grid = createElement('div', ['comparison-grid']);
+    toArray(widget.bars).forEach((bar) => {
+      const barNode = document.createElement('comparison-bar');
+      barNode.widget = bar;
+      grid.append(barNode);
+    });
+    body.append(grid);
+    return section;
+  }
+
+  return createElement('div');
 }
 
-function renderCompareBar(label, leftValue, rightValue, formatter = formatNumber, delay = 0.12) {
-  const left = Number(leftValue || 0);
-  const right = Number(rightValue || 0);
-  const max = Math.max(left, right, 1);
-  const leftWidth = `${Math.max((left / max) * 100, left > 0 ? 8 : 0)}%`;
-  const rightWidth = `${Math.max((right / max) * 100, right > 0 ? 8 : 0)}%`;
+class ChatMessageElement extends HTMLElement {
+  set message(value) {
+    this._message = value || {};
+    this.render();
+  }
 
-  return `
-    <article class="compare-metric-row animate-slide-up"${delayStyle(delay)}>
-      <div class="compare-bar-head">
-        <span class="list-title">${safeText(label)}</span>
-        <span class="list-subcopy">${safeText(formatter(left))} / ${safeText(formatter(right))}</span>
-      </div>
-      <div class="compare-bar-track">
-        <span class="compare-bar left" style="width:${leftWidth};"></span>
-        <span class="compare-bar right" style="width:${rightWidth};"></span>
-      </div>
-    </article>
-  `;
-}
+  render() {
+    const fragment = cloneTemplate('chat-message-template');
+    const article = fragment.querySelector('.chat-message');
+    const role = fragment.querySelector('[data-field="role"]');
+    const channel = fragment.querySelector('[data-field="channel"]');
+    const prefix = fragment.querySelector('[data-field="prefix"]');
+    const content = fragment.querySelector('[data-field="content"]');
+    const stack = fragment.querySelector('.chat-content-stack');
+    const message = this._message || {};
+    const isUser = message.role === 'user';
 
-async function renderPlayerStage(data = {}, payload = {}, requestId = state.activeRequestId) {
-  const player = data.player || {};
-  const stats = data.stats || {};
-  const playerName = player.canonical_name || player.name || data.title || 'Player Snapshot';
-  const playerImage = await fetchPlayerImage(playerName);
-  if (isStaleRequest(requestId)) return;
+    article.classList.toggle('user', isUser);
+    article.classList.toggle('assistant', !isUser);
+    article.dataset.role = isUser ? 'user' : 'assistant';
+    role.textContent = isUser ? 'System Input' : 'Telemetry Output';
+    channel.textContent = isUser ? 'INPUT' : 'OUTPUT';
+    prefix.hidden = !isUser;
+    content.textContent = message.content || '';
 
-  renderCanvasHeader({
-    eyebrow: 'Player Resolution',
-    title: data.title || playerName,
-    subtitle: data.subtitle || player.team || player.country || 'Archive profile',
-    chips: [player.team || player.country, 'Entity resolved'].filter(Boolean)
-  });
+    if (message.pending) {
+      stack.append(createTypingIndicator());
+    }
 
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <div class="identity-lockup">
-              ${renderEntityPortrait(playerName, playerImage)}
-              <div class="entity-copy">
-                <p class="stage-kicker">Resolved Entity</p>
-                <h3 class="hero-title">${safeText(playerName)}</h3>
-                <p class="hero-subtitle">${safeText(player.team || player.country || data.subtitle || 'Archive profile')}</p>
-              </div>
-            </div>
-            <p class="hero-summary">${safeText(payload.summary || data.summary || 'No summary available.')}</p>
-            <div class="stage-chip-row">
-              ${[...new Set([player.country, player.team, player.role || player.playing_role, player.batting_style].filter(Boolean))]
-                .map((item) => `<span class="stage-chip">${safeText(item)}</span>`)
-                .join('')}
-            </div>
-          </div>
-          ${renderStatFlex(
-            [
-              { label: 'Matches', value: formatNumber(stats.matches || 0), note: 'Appearances', tone: 'highlight' },
-              { label: 'Runs', value: formatNumber(stats.runs || 0), note: 'Batting output' },
-              { label: 'Average', value: formatDecimal(stats.average || 0), note: 'Batting average' },
-              { label: 'Strike Rate', value: formatDecimal(stats.strike_rate || 0), note: 'Scoring tempo' },
-              { label: 'Wickets', value: formatNumber(stats.wickets || 0), note: 'Bowling return' },
-              { label: 'Economy', value: formatDecimal(stats.economy || 0), note: 'Run control' }
-            ],
-            0.06
-          )}
-        </div>
-      </section>
-      <div class="stage-section-grid">
-        ${renderSectionPanel({
-          kicker: 'Detail Matrix',
-          title: 'Role Breakdown',
-          copy: 'Primary batting and bowling indicators from the verified archive.',
-          body: renderStatFlex(
-            [
-              { label: 'Innings', value: formatNumber(stats.innings || 0), note: 'Batting innings' },
-              { label: 'Balls Faced', value: formatNumber(stats.balls_faced || 0), note: 'Tracked deliveries' },
-              { label: 'Fours', value: formatNumber(stats.fours || 0), note: 'Boundary count' },
-              { label: 'Sixes', value: formatNumber(stats.sixes || 0), note: 'Power hitting' },
-              { label: 'Bowling Innings', value: formatNumber(stats.bowling_innings || 0), note: 'Bowling spells' },
-              { label: 'Overs Bowled', value: stats.overs_bowled || '0', note: 'Workload' }
-            ],
-            0.12
-          ),
-          delay: 0.12
-        })}
-        ${renderKeyStatsPanel(payload, 'Signal Board', 0.18)}
-      </div>
-      <div class="stage-section-grid">
-        ${renderMatchesPanel(
-          toArray(data.recent_matches),
-          'Recent Match Tape',
-          'Latest archived matches tied to this player.',
-          0.22
-        )}
-        ${renderInsightsPanel(payload, 0.28)}
-      </div>
-    </div>
-  `);
-}
+    if (toArray(message.actions).length) {
+      stack.append(createChipRow(message.actions));
+    }
 
-function renderTeamStage(data = {}, payload = {}) {
-  const team = data.team || {};
-  const stats = data.stats || {};
-  const teamName = team.name || data.title || 'Team Snapshot';
-
-  renderCanvasHeader({
-    eyebrow: 'Team Snapshot',
-    title: data.title || teamName,
-    subtitle: data.subtitle || 'Archive scope',
-    chips: [team.country, team.type, 'Team view'].filter(Boolean)
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <div class="identity-lockup">
-              ${renderEntityPortrait(teamName, fallbackAvatarUrl(teamName), 'crest')}
-              <div class="entity-copy">
-                <p class="stage-kicker">Team Surface</p>
-                <h3 class="hero-title">${safeText(teamName)}</h3>
-                <p class="hero-subtitle">${safeText(data.subtitle || team.country || 'Archive scope')}</p>
-              </div>
-            </div>
-            <p class="hero-summary">${safeText(payload.summary || data.summary || 'No summary available.')}</p>
-          </div>
-          ${renderStatFlex(
-            [
-              { label: 'Matches', value: formatNumber(stats.matches || 0), note: 'Sample size', tone: 'highlight' },
-              { label: 'Wins', value: formatNumber(stats.wins || 0), note: 'Victories' },
-              { label: 'Win Rate', value: formatPercent(stats.win_rate || 0), note: 'Conversion rate' },
-              { label: 'Average Score', value: formatDecimal(stats.average_score || 0), note: 'Runs per match' },
-              { label: 'Losses', value: formatNumber(stats.losses || 0), note: 'Defeats' },
-              { label: 'No Result', value: formatNumber(stats.no_result || 0), note: 'Incomplete outcomes' }
-            ],
-            0.06
-          )}
-        </div>
-      </section>
-      <div class="stage-section-grid">
-        ${renderMatchesPanel(
-          toArray(data.recent_matches),
-          'Recent Team Tape',
-          'Latest archived matches in the current team scope.',
-          0.14
-        )}
-        ${renderInsightsPanel(payload, 0.2)}
-      </div>
-    </div>
-  `);
-}
-
-async function renderCompareStage(data = {}, payload = {}, requestId = state.activeRequestId) {
-  const left = data.left || {};
-  const right = data.right || {};
-  const leftStats = left.stats || {};
-  const rightStats = right.stats || {};
-  const leftName = left.canonical_name || left.name || 'Player 1';
-  const rightName = right.canonical_name || right.name || 'Player 2';
-
-  const [leftImage, rightImage] = await Promise.all([fetchPlayerImage(leftName), fetchPlayerImage(rightName)]);
-  if (isStaleRequest(requestId)) return;
-
-  renderCanvasHeader({
-    eyebrow: 'Head-to-Head Comparison',
-    title: data.title || `${leftName} vs ${rightName}`,
-    subtitle: data.subtitle || 'Side-by-side archive comparison',
-    chips: ['Parallel image fetch', 'Compare view']
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="compare-hero">
-          <article class="compare-card animate-slide-up"${delayStyle(0.06)}>
-            ${renderEntityPortrait(leftName, leftImage)}
-            <div class="entity-copy">
-              <div class="compare-card-head">
-                <p class="stage-kicker">Left Profile</p>
-                <span class="stage-chip">${safeText(left.team || left.country || 'Archive')}</span>
-              </div>
-              <h3 class="section-title">${safeText(leftName)}</h3>
-              <p class="section-copy">${safeText(left.country || left.team || 'Player profile')}</p>
-            </div>
-          </article>
-          <div class="versus-badge animate-slide-up"${delayStyle(0.12)}>VS</div>
-          <article class="compare-card animate-slide-up"${delayStyle(0.18)}>
-            ${renderEntityPortrait(rightName, rightImage)}
-            <div class="entity-copy">
-              <div class="compare-card-head">
-                <p class="stage-kicker">Right Profile</p>
-                <span class="stage-chip">${safeText(right.team || right.country || 'Archive')}</span>
-              </div>
-              <h3 class="section-title">${safeText(rightName)}</h3>
-              <p class="section-copy">${safeText(right.country || right.team || 'Player profile')}</p>
-            </div>
-          </article>
-        </div>
-        <p class="hero-summary">${safeText(payload.summary || data.summary || 'No comparison summary available.')}</p>
-        ${renderStatFlex(
-          [
-            {
-              label: `${leftName.split(' ')[0]} Runs`,
-              value: formatNumber(leftStats.runs || 0),
-              note: 'Career total',
-              tone: 'highlight'
-            },
-            {
-              label: `${rightName.split(' ')[0]} Runs`,
-              value: formatNumber(rightStats.runs || 0),
-              note: 'Career total'
-            },
-            {
-              label: `${leftName.split(' ')[0]} SR`,
-              value: formatDecimal(leftStats.strike_rate || 0),
-              note: 'Strike rate'
-            },
-            {
-              label: `${rightName.split(' ')[0]} SR`,
-              value: formatDecimal(rightStats.strike_rate || 0),
-              note: 'Strike rate'
-            }
-          ],
-          0.12
-        )}
-      </section>
-      <div class="comparison-grid">
-        ${renderSectionPanel({
-          kicker: 'Pressure Split',
-          title: 'Core Metrics',
-          copy: 'Comparative scoring and bowling output rendered on a shared scale.',
-          body: `
-            <div class="stage-panel-grid">
-              ${renderCompareBar('Runs', leftStats.runs || 0, rightStats.runs || 0, formatNumber, 0.14)}
-              ${renderCompareBar('Average', leftStats.average || 0, rightStats.average || 0, (value) => formatDecimal(value), 0.2)}
-              ${renderCompareBar('Strike Rate', leftStats.strike_rate || 0, rightStats.strike_rate || 0, (value) => formatDecimal(value), 0.26)}
-              ${renderCompareBar('Wickets', leftStats.wickets || 0, rightStats.wickets || 0, formatNumber, 0.32)}
-              ${renderCompareBar('Economy', leftStats.economy || 0, rightStats.economy || 0, (value) => formatDecimal(value), 0.38)}
-            </div>
-          `,
-          delay: 0.14
-        })}
-        ${renderKeyStatsPanel(payload, 'Compare Signals', 0.2)}
-      </div>
-      ${renderInsightsPanel(payload, 0.26)}
-    </div>
-  `);
-}
-
-function renderMatchSummaryStage(data = {}, payload = {}) {
-  const match = data.match || {};
-  const scoreCards = Array.isArray(match.score)
-    ? match.score.map((row) => ({
-        label: row.inning || 'Innings',
-        value: `${row.runs || 0}/${row.wickets ?? '-'}`,
-        note: `${row.overs ?? '-'} overs`
-      }))
-    : [];
-
-  renderCanvasHeader({
-    eyebrow: 'Match Story',
-    title: data.title || match.name || 'Match Summary',
-    subtitle: data.subtitle || [formatDate(match.date || ''), match.venue].filter(Boolean).join(' | '),
-    chips: [match.winner ? `Winner: ${match.winner}` : '', match.match_type].filter(Boolean)
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <p class="stage-kicker">Result Signal</p>
-            <h3 class="hero-title">${safeText(match.name || 'Match Summary')}</h3>
-            <p class="hero-summary">${safeText(payload.summary || data.summary || match.summary || 'No summary available.')}</p>
-            <div class="stage-chip-row">
-              ${[match.venue, formatDate(match.date || ''), match.winner ? `Winner: ${match.winner}` : '', match.match_type]
-                .filter(Boolean)
-                .map((item) => `<span class="stage-chip">${safeText(item)}</span>`)
-                .join('')}
-            </div>
-          </div>
-          ${renderStatFlex(
-            scoreCards.length
-              ? scoreCards
-              : [{ label: 'Scorecard', value: 'Unavailable', note: 'No inning data returned', tone: 'highlight' }],
-            0.06
-          )}
-        </div>
-      </section>
-      <div class="stage-section-grid">
-        ${renderPerformerPanel(
-          'Top Batters',
-          'Highest batting contributions in this match.',
-          toArray(match.top_batters),
-          (row) => `${row.runs || 0} runs${row.balls ? ` in ${row.balls} balls` : ''}`,
-          0.12
-        )}
-        ${renderPerformerPanel(
-          'Top Bowlers',
-          'Best bowling figures from the scorecard.',
-          toArray(match.top_bowlers),
-          (row) => `${row.wickets || 0}/${row.runs_conceded || 0}${row.overs ? ` in ${row.overs}` : ''}`,
-          0.18
-        )}
-      </div>
-      ${renderInsightsPanel(payload, 0.24)}
-    </div>
-  `);
-}
-
-function renderHeadToHeadStage(data = {}, payload = {}) {
-  const stats = data.stats || {};
-  const title = data.title || `${data.team1 || 'Team 1'} vs ${data.team2 || 'Team 2'}`;
-
-  renderCanvasHeader({
-    eyebrow: 'Head-to-Head',
-    title,
-    subtitle: data.subtitle || 'Archive rivalry snapshot',
-    chips: ['Rivalry view']
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <p class="stage-kicker">Rivalry Frame</p>
-            <h3 class="hero-title">${safeText(title)}</h3>
-            <p class="hero-summary">${safeText(payload.summary || data.summary || 'No rivalry summary available.')}</p>
-          </div>
-          ${renderStatFlex(
-            [
-              { label: 'Matches', value: formatNumber(stats.matches || 0), note: 'Total meetings', tone: 'highlight' },
-              { label: data.team1 || 'Team 1', value: formatNumber(stats.wins_team_a || 0), note: 'Wins' },
-              { label: data.team2 || 'Team 2', value: formatNumber(stats.wins_team_b || 0), note: 'Wins' },
-              { label: 'No Result', value: formatNumber(stats.no_result || 0), note: 'Shared abandonments' }
-            ],
-            0.06
-          )}
-        </div>
-      </section>
-      <div class="stage-section-grid">
-        ${renderMatchesPanel(
-          toArray(data.recent_matches),
-          'Recent Meetings',
-          'Latest matches in this head-to-head rivalry.',
-          0.12
-        )}
-        ${renderInsightsPanel(payload, 0.18)}
-      </div>
-    </div>
-  `);
-}
-
-function renderTopPlayersStage(data = {}, payload = {}) {
-  renderCanvasHeader({
-    eyebrow: 'Leaderboard Surface',
-    title: data.title || 'Top Players',
-    subtitle: data.subtitle || 'Archive ranking',
-    chips: [data.metric ? `Metric: ${data.metric}` : 'Ranking']
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      ${renderLeaderboardPanel(
-        toArray(data.rows),
-        data.title || 'Top Players',
-        payload.summary || data.summary || 'Ranked performers returned by the current query.',
-        0.08
-      )}
-      ${renderInsightsPanel(payload, 0.16)}
-    </div>
-  `);
-}
-
-async function renderLiveUpdateStage(data = {}, payload = {}, requestId = state.activeRequestId) {
-  const matches = [];
-  if (data.live_match?.name) matches.push(data.live_match);
-  if (Array.isArray(data.upcoming_matches)) matches.push(...data.upcoming_matches);
-  if (Array.isArray(data.recent_matches)) matches.push(...data.recent_matches);
-
-  const trackedPlayerName = data.player?.name || '';
-  const trackedPlayerImage = trackedPlayerName ? await fetchPlayerImage(trackedPlayerName) : fallbackAvatarUrl('Live Cricket');
-  if (isStaleRequest(requestId)) return;
-
-  renderCanvasHeader({
-    eyebrow: 'Live Match Center',
-    title: data.title || 'Live Update',
-    subtitle: data.subtitle || 'Current and upcoming fixtures',
-    chips: [data.provider_status?.title, data.live_match?.name ? 'Live signal active' : 'No live match'].filter(Boolean)
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      <section class="hero-panel animate-fade-in">
-        <div class="hero-grid">
-          <div class="entity-copy">
-            <div class="identity-lockup">
-              ${renderEntityPortrait(trackedPlayerName || 'Live Cricket', trackedPlayerImage)}
-              <div class="entity-copy">
-                <p class="stage-kicker">Live Feed</p>
-                <h3 class="hero-title">${safeText(data.title || 'Live Match Center')}</h3>
-                <p class="hero-subtitle">${safeText(data.player?.name || data.provider_status?.title || 'Provider feed')}</p>
-              </div>
-            </div>
-            <p class="hero-summary">${safeText(payload.summary || data.summary || data.provider_status?.message || 'No live summary available.')}</p>
-          </div>
-          ${renderStatFlex(
-            [
-              { label: 'Live', value: data.live_match?.name ? 'Active' : 'Idle', note: 'Current live surface', tone: 'highlight' },
-              { label: 'Upcoming', value: formatNumber(toArray(data.upcoming_matches).length), note: 'Scheduled matches' },
-              { label: 'Recent', value: formatNumber(toArray(data.recent_matches).length), note: 'Recent feed items' },
-              { label: 'Tracked Player', value: data.player?.name || 'None', note: data.player?.country || 'No live player card' }
-            ],
-            0.06
-          )}
-        </div>
-      </section>
-      <div class="stage-section-grid">
-        ${renderMatchesPanel(
-          matches.filter((match) => match?.name),
-          'Live / Upcoming Tape',
-          'Live, scheduled, and recently returned fixtures from the feed.',
-          0.12
-        )}
-        ${renderInsightsPanel(payload, 0.18)}
-      </div>
-    </div>
-  `);
-}
-
-function renderSummaryStage(data = {}, payload = {}) {
-  renderCanvasHeader({
-    eyebrow: 'Summary Surface',
-    title: payload.title || data.title || 'Cricket Intelligence',
-    subtitle: payload.summary || data.summary || 'Natural language result',
-    chips: ['Summary']
-  });
-
-  setCanvasBody(`
-    <div class="stage-stack">
-      ${renderSectionPanel({
-        kicker: 'Summary',
-        title: payload.title || data.title || 'Cricket Intelligence',
-        copy: 'High-level result generated from the active query.',
-        body: `
-          <div class="summary-panel">
-            <p class="hero-summary">${safeText(payload.summary || data.summary || payload.answer || 'No summary available.')}</p>
-            ${renderChipButtons(suggestionsFromPayload(payload), 'chip')}
-          </div>
-        `,
-        delay: 0.08
-      })}
-      <div class="stage-section-grid">
-        ${renderKeyStatsPanel(payload, 'Signal Board', 0.14)}
-        ${renderInsightsPanel(payload, 0.2)}
-      </div>
-    </div>
-  `);
-}
-
-async function renderDynamicStage(data = {}, payload = state.lastPayload || {}, requestId = state.activeRequestId) {
-  switch (data.type) {
-    case 'player_stats':
-      await renderPlayerStage(data, payload, requestId);
-      break;
-    case 'team_stats':
-      renderTeamStage(data, payload);
-      break;
-    case 'compare_players':
-      await renderCompareStage(data, payload, requestId);
-      break;
-    case 'match_summary':
-      renderMatchSummaryStage(data, payload);
-      break;
-    case 'head_to_head':
-      renderHeadToHeadStage(data, payload);
-      break;
-    case 'top_players':
-      renderTopPlayersStage(data, payload);
-      break;
-    case 'live_update':
-      await renderLiveUpdateStage(data, payload, requestId);
-      break;
-    default:
-      renderSummaryStage(data, payload);
-      break;
+    this.replaceChildren(fragment);
   }
 }
 
-function renderChatMessage(role = 'assistant', body = '') {
-  const label = role === 'user' ? 'Field Producer' : 'Analytics Desk';
-  const avatar = role === 'user' ? 'YOU' : 'AI';
-  return `
-    <article class="chat-message ${safeText(role)} animate-fade-in">
-      <div class="chat-head">
-        <span class="chat-avatar">${safeText(avatar)}</span>
-        <div>
-          <p class="chat-role">${safeText(label)}</p>
-        </div>
-      </div>
-      <div class="chat-body">${body}</div>
-    </article>
-  `;
-}
+class ChatThreadElement extends HTMLElement {
+  connectedCallback() {
+    if (!this._mounted) {
+      const fragment = cloneTemplate('chat-thread-template');
+      this._messageRoot = fragment.querySelector('[data-role="messages"]');
+      this.append(fragment);
+      this._mounted = true;
+    }
 
-function appendChatMessage(role = 'assistant', body = '') {
-  elements.chatThread.insertAdjacentHTML('beforeend', renderChatMessage(role, body));
-  const node = elements.chatThread.lastElementChild;
-  elements.chatThread.scrollTop = elements.chatThread.scrollHeight;
-  return node;
-}
-
-function updateChatMessage(node, role = 'assistant', body = '') {
-  if (!node) return null;
-  const template = document.createElement('template');
-  template.innerHTML = renderChatMessage(role, body).trim();
-  const next = template.content.firstElementChild;
-  node.replaceWith(next);
-  elements.chatThread.scrollTop = elements.chatThread.scrollHeight;
-  return next;
-}
-
-function renderAssistantIntro() {
-  appendChatMessage(
-    'assistant',
-    `
-      <p class="chat-copy">
-        Broadcast analytics canvas is live. Ask for a player, a team, a match story, a live feed, or a direct comparison and the right stage will rebuild around that context.
-      </p>
-      ${renderChipButtons(STARTER_PROMPTS, 'chip')}
-    `
-  );
-}
-
-function renderPendingAssistant() {
-  return appendChatMessage(
-    'assistant',
-    `
-      <p class="chat-copy">Resolving the prompt, fetching structured evidence, and rebuilding the canvas.</p>
-      <div class="typing-indicator" aria-hidden="true"><span></span><span></span><span></span></div>
-    `
-  );
-}
-
-function renderAssistantPayload(payload = {}) {
-  const summary = payload.summary || payload.answer || 'No answer returned.';
-  const suggestions = suggestionsFromPayload(payload);
-  return `
-    <p class="chat-copy">${safeText(summary)}</p>
-    ${suggestions.length ? renderChipButtons(suggestions, 'chip') : ''}
-  `;
-}
-
-function renderErrorStage(message = '') {
-  renderCanvasHeader({
-    eyebrow: 'Canvas Fault',
-    title: 'Query could not be completed',
-    subtitle: 'The analytics stage did not receive a usable payload.',
-    chips: ['Fault']
-  });
-
-  setCanvasBody(`
-    <section class="stage-panel empty-state animate-fade-in">
-      <h3 class="empty-title">Request failed</h3>
-      <p class="empty-copy">${safeText(message || 'Unable to complete this query right now.')}</p>
-      ${renderChipButtons(STARTER_PROMPTS.slice(0, 3), 'chip')}
-    </section>
-  `);
-}
-
-function openCanvasOnMobile() {
-  if (window.innerWidth >= 768) return;
-  document.body.classList.add('mobile-stage-open');
-}
-
-function closeCanvasOnMobile() {
-  document.body.classList.remove('mobile-stage-open');
-}
-
-function syncViewportMode() {
-  if (window.innerWidth >= 768) {
-    closeCanvasOnMobile();
+    this._unsubscribe = subscribe('chatHistory', () => this.scheduleRender());
+    this.scheduleRender();
   }
+
+  disconnectedCallback() {
+    this._unsubscribe?.();
+  }
+
+  scheduleRender() {
+    if (this._renderQueued) return;
+    this._renderQueued = true;
+    requestAnimationFrame(() => {
+      this._renderQueued = false;
+      this.render();
+    });
+  }
+
+  render() {
+    if (!this._messageRoot) return;
+    const nodes = toArray(state.chatHistory).map((message) => {
+      const node = document.createElement('chat-message');
+      node.message = message;
+      return node;
+    });
+    this._messageRoot.replaceChildren(...nodes);
+    scrollToBottom(this);
+  }
+}
+
+class StatCardElement extends HTMLElement {
+  set widget(value) {
+    this._widget = value || {};
+    this.render();
+  }
+
+  render() {
+    const fragment = cloneTemplate('stat-card-template');
+    const card = fragment.querySelector('.stat-card');
+    const label = fragment.querySelector('[data-field="label"]');
+    const value = fragment.querySelector('[data-field="value"]');
+    const note = fragment.querySelector('[data-field="note"]');
+    const widget = this._widget || {};
+
+    if (widget.tone) {
+      card.classList.add(widget.tone);
+    }
+
+    label.textContent = widget.label || 'Signal';
+    value.textContent = String(widget.value ?? '-');
+    note.textContent = widget.note || '';
+    note.hidden = !widget.note;
+    this.replaceChildren(fragment);
+  }
+}
+
+class LiveMatchBannerElement extends HTMLElement {
+  set widget(value) {
+    this._widget = value || {};
+    this.render();
+  }
+
+  render() {
+    const fragment = cloneTemplate('live-match-banner-template');
+    const widget = this._widget || {};
+    const kicker = fragment.querySelector('[data-field="kicker"]');
+    const title = fragment.querySelector('[data-field="title"]');
+    const subtitle = fragment.querySelector('[data-field="subtitle"]');
+    const summary = fragment.querySelector('[data-field="summary"]');
+    const chipRoot = fragment.querySelector('[data-role="chips"]');
+    const statRoot = fragment.querySelector('[data-role="stats"]');
+
+    kicker.textContent = widget.kicker || 'Live Feed';
+    title.textContent = widget.title || 'Live Match Center';
+    subtitle.textContent = widget.subtitle || '';
+    subtitle.hidden = !widget.subtitle;
+    summary.textContent = widget.summary || '';
+    summary.hidden = !widget.summary;
+
+    chipRoot.replaceChildren(
+      ...toArray(widget.chips)
+        .filter(Boolean)
+        .map((chip) => {
+          const node = createElement('span', ['stage-chip']);
+          node.textContent = chip;
+          return node;
+        })
+    );
+
+    statRoot.replaceChildren(
+      ...toArray(widget.stats).map((item) => {
+        const card = document.createElement('stat-card');
+        card.widget = item;
+        return card;
+      })
+    );
+
+    this.replaceChildren(fragment);
+  }
+}
+
+class ComparisonBarElement extends HTMLElement {
+  set widget(value) {
+    this._widget = value || {};
+    this.render();
+  }
+
+  render() {
+    const fragment = cloneTemplate('comparison-bar-template');
+    const widget = this._widget || {};
+    const label = fragment.querySelector('[data-field="label"]');
+    const leftValue = fragment.querySelector('[data-field="left-value"]');
+    const rightValue = fragment.querySelector('[data-field="right-value"]');
+    const leftBar = fragment.querySelector('[data-role="left-bar"]');
+    const rightBar = fragment.querySelector('[data-role="right-bar"]');
+
+    const leftAmount = Number(widget.leftAmount || 0);
+    const rightAmount = Number(widget.rightAmount || 0);
+    const total = leftAmount + rightAmount;
+    const leftRatio = total > 0 ? Math.max(8, Math.round((leftAmount / total) * 100)) : 50;
+    const rightRatio = total > 0 ? Math.max(8, Math.round((rightAmount / total) * 100)) : 50;
+
+    label.textContent = widget.label || 'Comparison';
+    leftValue.textContent = widget.leftValue || '';
+    rightValue.textContent = widget.rightValue || '';
+    leftBar.style.width = `${leftRatio}%`;
+    rightBar.style.width = `${rightRatio}%`;
+    this.replaceChildren(fragment);
+  }
+}
+
+class DynamicCanvasElement extends HTMLElement {
+  connectedCallback() {
+    if (!this._mounted) {
+      const fragment = cloneTemplate('dynamic-canvas-template');
+      this._eyebrow = fragment.querySelector('[data-field="eyebrow"]');
+      this._title = fragment.querySelector('[data-field="title"]');
+      this._subtitle = fragment.querySelector('[data-field="subtitle"]');
+      this._chipRoot = fragment.querySelector('[data-role="chips"]');
+      this._widgetRoot = fragment.querySelector('[data-role="widgets"]');
+      this._scrollRegion = fragment.querySelector('.stage-scroll');
+      this.style.display = 'grid';
+      this.style.gridTemplateRows = 'auto minmax(0, 1fr)';
+      this.style.gap = '18px';
+      this.style.height = '100%';
+      this.append(fragment);
+      this._mounted = true;
+    }
+
+    this._unsubscribe = subscribe('canvasLayout', () => this.scheduleRender());
+    this.scheduleRender();
+  }
+
+  disconnectedCallback() {
+    this._unsubscribe?.();
+  }
+
+  scheduleRender() {
+    if (this._renderQueued) return;
+    this._renderQueued = true;
+    requestAnimationFrame(() => {
+      this._renderQueued = false;
+      this.render();
+    });
+  }
+
+  render() {
+    const layout = state.canvasLayout || {};
+    this._eyebrow.textContent = layout.eyebrow || 'Omni-Channel Canvas';
+    this._title.textContent = layout.title || 'Cricket Analytics Broadcast';
+    this._subtitle.textContent = layout.subtitle || '';
+    this._subtitle.hidden = !layout.subtitle;
+
+    const chips = toArray(layout.chips).filter(Boolean);
+    this._chipRoot.replaceChildren(
+      ...chips.map((chip) => {
+        const node = createElement('span', ['stage-chip']);
+        node.textContent = chip;
+        return node;
+      })
+    );
+
+    const widgets = toArray(layout.widgets).map((widget) => renderWidget(widget));
+    this._widgetRoot.replaceChildren(...widgets);
+    this._scrollRegion.setAttribute('aria-busy', layout.busy ? 'true' : 'false');
+  }
+}
+
+if (!customElements.get('chat-message')) {
+  customElements.define('chat-message', ChatMessageElement);
+}
+
+if (!customElements.get('chat-thread')) {
+  customElements.define('chat-thread', ChatThreadElement);
+}
+
+if (!customElements.get('stat-card')) {
+  customElements.define('stat-card', StatCardElement);
+}
+
+if (!customElements.get('live-match-banner')) {
+  customElements.define('live-match-banner', LiveMatchBannerElement);
+}
+
+if (!customElements.get('comparison-bar')) {
+  customElements.define('comparison-bar', ComparisonBarElement);
+}
+
+if (!customElements.get('dynamic-canvas')) {
+  customElements.define('dynamic-canvas', DynamicCanvasElement);
+}
+
+function fetchJson(url, options = {}) {
+  return fetch(url, options).then(async (response) => {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.message || payload.summary || 'Request failed.');
+    }
+    return payload;
+  });
+}
+
+function renderStarterDeck() {
+  elements.starterChips.replaceChildren(
+    ...toArray(state.starterPrompts).map((prompt) => createChipButton(prompt))
+  );
+}
+
+function renderConnectionStatus() {
+  elements.statusPill.textContent = state.connectionStatus.pill;
+  elements.statusCopy.textContent = state.connectionStatus.copy;
+}
+
+function renderComposerState() {
+  elements.sendButton.disabled = Boolean(state.isQuerying);
+  elements.sendButton.textContent = state.isQuerying ? 'Thinking...' : 'Send';
 }
 
 function resizeComposer() {
@@ -1180,156 +731,814 @@ function resizeComposer() {
   input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
 }
 
-async function refreshStatus() {
+function openCanvasOnMobile() {
+  // Phase 1 uses a single-column chat layout with no separate mobile canvas.
+}
+
+function closeCanvasOnMobile() {
+  // Phase 1 uses a single-column chat layout with no separate mobile canvas.
+}
+
+function syncViewportMode() {
+  if (window.innerWidth >= 768) {
+    closeCanvasOnMobile();
+  }
+}
+
+function nextMessageId() {
+  return globalThis.crypto?.randomUUID?.() || `message-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function appendChatMessage(role = 'assistant', content = '', options = {}) {
+  state.chatHistory.push({
+    id: nextMessageId(),
+    role,
+    content,
+    pending: Boolean(options.pending),
+    actions: toArray(options.actions)
+  });
+  return state.chatHistory[state.chatHistory.length - 1];
+}
+
+function updateChatMessage(messageId = '', patch = {}) {
+  const target = toArray(state.chatHistory).find((message) => message.id === messageId);
+  if (!target) return;
+  Object.entries(patch).forEach(([key, value]) => {
+    target[key] = value;
+  });
+}
+
+function buildBootCanvasLayout() {
+  const status = state.archiveStatus || {};
+  return {
+    eyebrow: 'Omni-Channel Canvas',
+    title: 'Broadcast stage warming',
+    subtitle: 'Natural language controls will take over as soon as the archive is ready.',
+    chips: [state.connectionStatus.pill],
+    widgets: [
+      {
+        type: 'live_match_banner',
+        kicker: 'System Bring-Up',
+        title: 'Stadium Night signal path is online',
+        summary: state.connectionStatus.copy,
+        stats: [
+          { label: 'Status', value: state.connectionStatus.pill, note: 'Archive readiness', tone: 'highlight' },
+          { label: 'Rows', value: formatCompact(status.rows_processed || 0), note: 'Indexed so far' },
+          { label: 'Control', value: 'Chat', note: 'Primary command surface' },
+          { label: 'Theme', value: 'Night', note: 'Broadcast interface' }
+        ]
+      },
+      {
+        type: 'empty_state',
+        title: 'Awaiting first command',
+        copy: 'Ask for a player, a team, a match, or a comparison to generate the first analytics composition.',
+        actions: state.starterPrompts.slice(0, 4)
+      }
+    ]
+  };
+}
+
+function buildLandingCanvasLayout() {
+  const home = state.homeData || {};
+  const quickStats = home.quick_stats || {};
+  const topPlayers = toArray(home.top_players).slice(0, 6);
+  const liveItems = toArray(state.liveData).slice(0, 4);
+  const fallbackMatches = toArray(home.recent_matches).slice(0, 4);
+
+  return {
+    eyebrow: 'Omni-Channel Canvas',
+    title: 'Command the field with language',
+    subtitle: 'Use the left command center to summon player stories, live surfaces, and comparison scenes.',
+    chips: ['Canvas online', liveItems.length ? `${liveItems.length} live feeds` : 'Archive-first mode'],
+    widgets: [
+      {
+        type: 'live_match_banner',
+        kicker: 'Opening Feed',
+        title: 'One canvas. Every cricket question.',
+        summary:
+          'This stage is built around natural language resolution. Ask for player stats, match stories, team form, live updates, or side-by-side comparisons and the canvas will rebuild around that intent.',
+        stats: [
+          { label: 'Matches', value: formatCompact(quickStats.matches || 0), note: 'Archive footprint', tone: 'highlight' },
+          { label: 'Players', value: formatCompact(quickStats.players || 0), note: 'Profiles in scope' },
+          { label: 'Teams', value: formatCompact(quickStats.teams || 0), note: 'Competitive entities' },
+          { label: 'Seasons', value: quickStats.seasons || 'N/A', note: 'Coverage window' }
+        ]
+      },
+      {
+        type: 'leaderboard',
+        kicker: 'Ranking',
+        title: 'Featured Batters',
+        copy: 'High-output names currently loaded into the archive.',
+        rows: topPlayers.map((player, index) => ({
+          rank: index + 1,
+          player: player.name,
+          team: player.team,
+          value: `${formatNumber(player.runs || 0)} runs`
+        }))
+      },
+      {
+        type: 'match_list',
+        kicker: 'Tape',
+        title: liveItems.length ? 'Live Signal' : 'Recent Archive Tape',
+        copy: liveItems.length
+          ? 'Live or recent feed items from the connected match provider.'
+          : 'Latest archived matches available locally.',
+        matches: liveItems.length ? liveItems : fallbackMatches
+      }
+    ]
+  };
+}
+
+function buildSkeletonCanvasLayout(question = '') {
+  return {
+    eyebrow: 'Analytics Canvas',
+    title: 'Resolving Query',
+    subtitle: question || 'Interpreting the prompt and composing the next stage.',
+    chips: [state.connectionStatus.chip],
+    busy: true,
+    widgets: [
+      {
+        type: 'live_match_banner',
+        kicker: 'Query Mapping',
+        title: 'Signal path is warming up',
+        summary: 'Fetching structured evidence and preparing the next analytics canvas.',
+        stats: [
+          { label: 'Intent', value: 'Parsing', note: 'Understanding the prompt', tone: 'highlight' },
+          { label: 'Archive', value: state.connectionStatus.pill, note: 'Current data source state' },
+          { label: 'Renderer', value: 'Canvas', note: 'Preparing reactive widgets' }
+        ]
+      }
+    ]
+  };
+}
+
+function buildErrorCanvasLayout(message = '') {
+  return {
+    eyebrow: 'Canvas Fault',
+    title: 'Query could not be completed',
+    subtitle: 'The analytics stage did not receive a usable payload.',
+    chips: ['Fault'],
+    widgets: [
+      {
+        type: 'empty_state',
+        title: 'Request failed',
+        copy: message || 'Unable to complete this query right now.',
+        actions: state.starterPrompts.slice(0, 3)
+      }
+    ]
+  };
+}
+
+function numericStatCards(items = []) {
+  return items
+    .filter((item) => item.value !== undefined && item.value !== null)
+    .map((item) => ({
+      label: item.label,
+      value: item.value,
+      note: item.note || '',
+      tone: item.tone || ''
+    }));
+}
+
+function buildPlayerCanvasLayout(payload = {}, data = {}) {
+  const player = data.player || {};
+  const stats = data.stats || {};
+  const recentMatches = toArray(data.recent_matches || stats.recent_matches).slice(0, 6);
+
+  return {
+    eyebrow: 'Player Surface',
+    title: player.name || 'Player Stats',
+    subtitle: player.team || 'Archive player profile',
+    chips: [player.team, 'Player stats'].filter(Boolean),
+    widgets: [
+      {
+        type: 'stat_grid',
+        items: numericStatCards([
+          { label: 'Matches', value: formatNumber(stats.matches || 0), note: 'Archive sample', tone: 'highlight' },
+          { label: 'Runs', value: formatNumber(stats.runs || 0), note: 'Career total' },
+          { label: 'Average', value: formatDecimal(stats.average || 0), note: 'Batting average' },
+          { label: 'Strike Rate', value: formatDecimal(stats.strike_rate || 0), note: 'Scoring tempo' },
+          { label: 'Wickets', value: formatNumber(stats.wickets || 0), note: 'Bowling return' },
+          { label: 'Economy', value: formatDecimal(stats.economy || 0), note: 'Runs conceded per over' }
+        ])
+      },
+      {
+        type: 'message_panel',
+        kicker: 'Analyst Readout',
+        title: 'Summary',
+        copy: 'Structured response from the archive-backed analytics layer.',
+        summary: payload.summary || payload.answer || 'No summary available.',
+        actions: suggestionsFromPayload(payload)
+      },
+      {
+        type: 'match_list',
+        kicker: 'Tape',
+        title: 'Recent Matches',
+        copy: 'Latest archived matches contributing to this player view.',
+        matches: recentMatches
+      }
+    ]
+  };
+}
+
+function buildTeamCanvasLayout(payload = {}, data = {}) {
+  const team = data.team || {};
+  const stats = data.stats || {};
+  return {
+    eyebrow: 'Team Surface',
+    title: team.name || 'Team Stats',
+    subtitle: payload.summary || 'Archive team performance snapshot',
+    chips: ['Team stats'],
+    widgets: [
+      {
+        type: 'stat_grid',
+        items: numericStatCards([
+          { label: 'Matches', value: formatNumber(stats.matches || 0), note: 'Archive sample', tone: 'highlight' },
+          { label: 'Wins', value: formatNumber(stats.wins || 0), note: 'Victories' },
+          { label: 'Win Rate', value: `${formatDecimal(stats.win_rate || 0)}%`, note: 'Share of matches won' },
+          { label: 'Average Score', value: formatDecimal(stats.average_score || 0), note: 'Runs per match' },
+          { label: 'Runs', value: formatNumber(stats.runs || 0), note: 'Total team runs' },
+          { label: 'Wickets Lost', value: formatNumber(stats.wickets_lost || 0), note: 'Dismissals recorded' }
+        ])
+      },
+      {
+        type: 'message_panel',
+        kicker: 'Analyst Readout',
+        title: 'Summary',
+        copy: 'Verified archive interpretation for the current team scope.',
+        summary: payload.summary || payload.answer || 'No summary available.',
+        actions: suggestionsFromPayload(payload)
+      },
+      {
+        type: 'match_list',
+        kicker: 'Tape',
+        title: 'Recent Matches',
+        copy: 'Latest matches contributing to this team snapshot.',
+        matches: toArray(stats.recent_matches).slice(0, 6)
+      }
+    ]
+  };
+}
+
+function buildCompareCanvasLayout(payload = {}, data = {}) {
+  const left = data.left || {};
+  const right = data.right || {};
+  const leftStats = left.stats || {};
+  const rightStats = right.stats || {};
+
+  return {
+    eyebrow: 'Compare Surface',
+    title: `${left.name || 'Player A'} vs ${right.name || 'Player B'}`,
+    subtitle: payload.summary || 'Archive comparison snapshot',
+    chips: ['Versus mode'],
+    widgets: [
+      {
+        type: 'stat_grid',
+        items: [
+          { label: left.name || 'Left', value: formatNumber(leftStats.runs || 0), note: 'Runs', tone: 'highlight' },
+          { label: right.name || 'Right', value: formatNumber(rightStats.runs || 0), note: 'Runs' },
+          { label: 'Left SR', value: formatDecimal(leftStats.strike_rate || 0), note: 'Strike rate' },
+          { label: 'Right SR', value: formatDecimal(rightStats.strike_rate || 0), note: 'Strike rate' }
+        ]
+      },
+      {
+        type: 'comparison_group',
+        kicker: 'Pressure Split',
+        title: 'Core Metrics',
+        copy: 'Shared-scale view of the compared player signals.',
+        bars: [
+          {
+            label: 'Runs',
+            leftAmount: Number(leftStats.runs || 0),
+            rightAmount: Number(rightStats.runs || 0),
+            leftValue: `${left.name || 'Left'}: ${formatNumber(leftStats.runs || 0)}`,
+            rightValue: `${right.name || 'Right'}: ${formatNumber(rightStats.runs || 0)}`
+          },
+          {
+            label: 'Average',
+            leftAmount: Number(leftStats.average || 0),
+            rightAmount: Number(rightStats.average || 0),
+            leftValue: `${left.name || 'Left'}: ${formatDecimal(leftStats.average || 0)}`,
+            rightValue: `${right.name || 'Right'}: ${formatDecimal(rightStats.average || 0)}`
+          },
+          {
+            label: 'Strike Rate',
+            leftAmount: Number(leftStats.strike_rate || 0),
+            rightAmount: Number(rightStats.strike_rate || 0),
+            leftValue: `${left.name || 'Left'}: ${formatDecimal(leftStats.strike_rate || 0)}`,
+            rightValue: `${right.name || 'Right'}: ${formatDecimal(rightStats.strike_rate || 0)}`
+          },
+          {
+            label: 'Wickets',
+            leftAmount: Number(leftStats.wickets || 0),
+            rightAmount: Number(rightStats.wickets || 0),
+            leftValue: `${left.name || 'Left'}: ${formatNumber(leftStats.wickets || 0)}`,
+            rightValue: `${right.name || 'Right'}: ${formatNumber(rightStats.wickets || 0)}`
+          }
+        ]
+      },
+      {
+        type: 'message_panel',
+        kicker: 'Analyst Readout',
+        title: 'Summary',
+        copy: 'Comparison summary returned by the current backend query.',
+        summary: payload.summary || payload.answer || 'No comparison summary available.',
+        actions: suggestionsFromPayload(payload)
+      }
+    ]
+  };
+}
+
+function buildMatchSummaryCanvasLayout(payload = {}, data = {}) {
+  const match = data.match || {};
+  const scoreCards = toArray(match.score || data.score).slice(0, 4);
+
+  return {
+    eyebrow: 'Match Story',
+    title: match.name || data.title || 'Match Summary',
+    subtitle: [formatDate(match.date || ''), match.venue].filter(Boolean).join(' | '),
+    chips: [match.winner ? `Winner: ${match.winner}` : '', match.match_type].filter(Boolean),
+    widgets: [
+      {
+        type: 'live_match_banner',
+        kicker: 'Result Signal',
+        title: match.name || 'Match Summary',
+        summary: payload.summary || match.summary || 'No summary available.',
+        chips: [match.venue, formatDate(match.date || ''), match.winner ? `Winner: ${match.winner}` : '', match.match_type].filter(Boolean),
+        stats: scoreCards.length
+          ? scoreCards.map((row) => ({
+              label: row.inning || 'Innings',
+              value: `${row.runs || 0}/${row.wickets ?? '-'}`,
+              note: `${row.overs ?? '-'} overs`
+            }))
+          : [{ label: 'Scorecard', value: 'Unavailable', note: 'No inning data returned', tone: 'highlight' }]
+      },
+      {
+        type: 'leaderboard',
+        kicker: 'Batting',
+        title: 'Top Batters',
+        copy: 'Highest batting contributions from this match.',
+        rows: toArray(match.top_batters).slice(0, 4).map((row, index) => ({
+          rank: index + 1,
+          player: row.name,
+          team: row.team,
+          value: `${row.runs || 0} runs${row.balls ? ` in ${row.balls} balls` : ''}`
+        }))
+      },
+      {
+        type: 'leaderboard',
+        kicker: 'Bowling',
+        title: 'Top Bowlers',
+        copy: 'Best bowling figures from the scorecard.',
+        rows: toArray(match.top_bowlers).slice(0, 4).map((row, index) => ({
+          rank: index + 1,
+          player: row.name,
+          team: row.team || 'Archive',
+          value: `${row.wickets || 0}/${row.runs_conceded || 0}${row.overs ? ` in ${row.overs}` : ''}`
+        }))
+      }
+    ]
+  };
+}
+
+function buildHeadToHeadCanvasLayout(payload = {}, data = {}) {
+  const stats = data.stats || {};
+  return {
+    eyebrow: 'Head-to-Head',
+    title: data.title || `${data.team1 || 'Team 1'} vs ${data.team2 || 'Team 2'}`,
+    subtitle: payload.summary || 'Archive rivalry snapshot',
+    chips: ['Rivalry view'],
+    widgets: [
+      {
+        type: 'comparison_group',
+        kicker: 'Pressure Split',
+        title: 'Wins Balance',
+        copy: 'Head-to-head distribution for the selected rivalry.',
+        bars: [
+          {
+            label: 'Wins',
+            leftAmount: Number(stats.wins_team_a || 0),
+            rightAmount: Number(stats.wins_team_b || 0),
+            leftValue: `${data.team1 || 'Team 1'}: ${formatNumber(stats.wins_team_a || 0)}`,
+            rightValue: `${data.team2 || 'Team 2'}: ${formatNumber(stats.wins_team_b || 0)}`
+          }
+        ]
+      },
+      {
+        type: 'stat_grid',
+        items: [
+          { label: 'Matches', value: formatNumber(stats.matches || 0), note: 'Total meetings', tone: 'highlight' },
+          { label: data.team1 || 'Team 1', value: formatNumber(stats.wins_team_a || 0), note: 'Wins' },
+          { label: data.team2 || 'Team 2', value: formatNumber(stats.wins_team_b || 0), note: 'Wins' },
+          { label: 'No Result', value: formatNumber(stats.no_result || 0), note: 'Abandonments' }
+        ]
+      },
+      {
+        type: 'match_list',
+        kicker: 'Tape',
+        title: 'Recent Meetings',
+        copy: 'Latest matches in this rivalry sample.',
+        matches: toArray(data.recent_matches || stats.recent_matches).slice(0, 6)
+      }
+    ]
+  };
+}
+
+function buildTopPlayersCanvasLayout(payload = {}, data = {}) {
+  return {
+    eyebrow: 'Leaderboard Surface',
+    title: data.title || 'Top Players',
+    subtitle: payload.summary || 'Archive ranking',
+    chips: [data.metric ? `Metric: ${data.metric}` : 'Ranking'],
+    widgets: [
+      {
+        type: 'leaderboard',
+        kicker: 'Ranking',
+        title: data.title || 'Top Players',
+        copy: 'Ranked performers returned by the current query.',
+        rows: toArray(data.rows)
+      },
+      {
+        type: 'message_panel',
+        kicker: 'Analyst Readout',
+        title: 'Summary',
+        copy: 'Short explanation for the current ranking scope.',
+        summary: payload.summary || payload.answer || 'No ranking summary available.',
+        actions: suggestionsFromPayload(payload)
+      }
+    ]
+  };
+}
+
+function buildLiveUpdateCanvasLayout(payload = {}, data = {}) {
+  const matches = [];
+  if (data.live_match?.name) matches.push(data.live_match);
+  if (Array.isArray(data.upcoming_matches)) matches.push(...data.upcoming_matches);
+  if (Array.isArray(data.recent_matches)) matches.push(...data.recent_matches);
+
+  return {
+    eyebrow: 'Live Match Center',
+    title: data.title || 'Live Update',
+    subtitle: data.subtitle || 'Current and upcoming fixtures',
+    chips: [data.provider_status?.title, data.live_match?.name ? 'Live signal active' : 'No live match'].filter(Boolean),
+    widgets: [
+      {
+        type: 'live_match_banner',
+        kicker: 'Live Feed',
+        title: data.title || 'Live Match Center',
+        subtitle: data.player?.name || data.provider_status?.title || '',
+        summary: payload.summary || data.summary || data.provider_status?.message || 'No live summary available.',
+        stats: [
+          { label: 'Live', value: data.live_match?.name ? 'Active' : 'Idle', note: 'Current live surface', tone: 'highlight' },
+          { label: 'Upcoming', value: formatNumber(toArray(data.upcoming_matches).length), note: 'Scheduled matches' },
+          { label: 'Recent', value: formatNumber(toArray(data.recent_matches).length), note: 'Recent feed items' },
+          { label: 'Tracked Player', value: data.player?.name || 'None', note: data.player?.country || 'No live player card' }
+        ]
+      },
+      {
+        type: 'match_list',
+        kicker: 'Tape',
+        title: 'Live / Upcoming Tape',
+        copy: 'Live, scheduled, and recent fixtures from the provider feed.',
+        matches: matches.filter((match) => match?.name)
+      }
+    ]
+  };
+}
+
+function buildSummaryCanvasLayout(payload = {}, data = {}) {
+  const keyStats = toArray(payload.key_stats);
+  return {
+    eyebrow: 'Summary Surface',
+    title: payload.title || data.title || 'Cricket Intelligence',
+    subtitle: payload.summary || data.summary || 'Natural language result',
+    chips: ['Summary'],
+    widgets: [
+      {
+        type: 'message_panel',
+        kicker: 'Summary',
+        title: payload.title || data.title || 'Cricket Intelligence',
+        copy: 'High-level result generated from the active query.',
+        summary: payload.summary || data.summary || payload.answer || 'No summary available.',
+        actions: suggestionsFromPayload(payload)
+      },
+      ...(keyStats.length
+        ? [
+            {
+              type: 'stat_grid',
+              items: keyStats.map((item) => ({
+                label: item.label || 'Signal',
+                value:
+                  item.left !== undefined || item.right !== undefined
+                    ? `${item.left ?? '-'} / ${item.right ?? '-'}`
+                    : String(item.value ?? '-'),
+                note: ''
+              }))
+            }
+          ]
+        : [])
+    ]
+  };
+}
+
+function buildCanvasLayoutFromPayload(payload = {}) {
+  const data = detailData(payload);
+
+  switch (data.type) {
+    case 'player_stats':
+      return buildPlayerCanvasLayout(payload, data);
+    case 'team_stats':
+      return buildTeamCanvasLayout(payload, data);
+    case 'compare_players':
+      return buildCompareCanvasLayout(payload, data);
+    case 'match_summary':
+      return buildMatchSummaryCanvasLayout(payload, data);
+    case 'head_to_head':
+      return buildHeadToHeadCanvasLayout(payload, data);
+    case 'top_players':
+      return buildTopPlayersCanvasLayout(payload, data);
+    case 'live_update':
+      return buildLiveUpdateCanvasLayout(payload, data);
+    default:
+      return buildSummaryCanvasLayout(payload, data);
+  }
+}
+
+const SESSION_STORAGE_KEY = 'cricket-chatbot-session-id';
+let activeStream = null;
+let statusPollTimer = null;
+
+function getOrCreateSessionId() {
+  const fallback = nextMessageId();
+  try {
+    const existing = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (existing) return existing;
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, fallback);
+    return fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function scrollToBottom(target = document.querySelector('#chat-thread')) {
+  const node = target;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (node && typeof node.scrollTo === 'function' && node.scrollHeight > node.clientHeight + 4) {
+        node.scrollTo({
+          top: node.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth'
+      });
+    });
+  });
+}
+
+function parseEventPayload(event) {
+  try {
+    return JSON.parse(String(event?.data || '{}'));
+  } catch (_) {
+    return {};
+  }
+}
+
+function closeActiveStream() {
+  if (!activeStream) return;
+  activeStream.close();
+  activeStream = null;
+}
+
+function answerTextFromPayload(payload = {}) {
+  return String(payload.answer || payload.summary || payload.message || 'No answer was returned.').trim();
+}
+
+function setLandingCanvasIfIdle() {
+  if (state.hasAskedQuestion) return;
+  state.canvasLayout = state.connectionStatus.phase === 'ready' ? buildLandingCanvasLayout() : buildBootCanvasLayout();
+}
+
+async function refreshArchiveStatus() {
   try {
     const status = await fetchJson('/api/status');
-    state.status = status;
-    const meta = statusMeta(status);
-    elements.statusPill.textContent = meta.pill;
-    elements.statusCopy.textContent = meta.copy;
-
-    if (!state.hasAskedQuestion) {
-      if (state.home) {
-        renderLandingStage();
-      } else {
-        renderBootStage();
+    state.archiveStatus = status;
+    state.connectionStatus = statusMeta(status);
+    if (status?.status === 'ready') {
+      if (statusPollTimer) {
+        clearInterval(statusPollTimer);
+        statusPollTimer = null;
       }
-    }
-
-    if (status.status === 'ready' && state.pollTimer) {
-      window.clearInterval(state.pollTimer);
-      state.pollTimer = null;
-      if (!state.home) {
-        void loadLandingData();
-      }
+      await refreshHomeData();
     }
   } catch (error) {
-    elements.statusPill.textContent = 'Archive unreachable';
-    elements.statusCopy.textContent = error.message || 'Unable to reach the backend.';
+    state.connectionStatus = statusMeta({
+      status: 'error',
+      error: error?.message || 'Unable to load archive status.'
+    });
+  } finally {
+    setLandingCanvasIfIdle();
   }
 }
 
-async function loadLandingData() {
-  const [homeResult, liveResult] = await Promise.allSettled([
-    fetchJson('/api/home'),
-    fetchJson('/api/cricapi/live-scores?limit=4&includeRecent=true')
-  ]);
-
-  if (homeResult.status === 'fulfilled') {
-    state.home = homeResult.value;
+async function refreshHomeData() {
+  try {
+    state.homeData = await fetchJson('/api/home');
+  } catch (_) {
+    // Keep the existing landing surface if home data is still warming up.
+  } finally {
+    setLandingCanvasIfIdle();
   }
+}
 
-  if (liveResult.status === 'fulfilled') {
-    state.live = toArray(liveResult.value.items);
+async function refreshLiveData() {
+  try {
+    const payload = await fetchJson('/api/cricapi/live-scores?includeRecent=true&limit=4');
+    state.liveData = toArray(payload.items);
+  } catch (_) {
+    state.liveData = [];
+  } finally {
+    setLandingCanvasIfIdle();
   }
+}
 
-  if (!state.hasAskedQuestion) {
-    if (state.home) {
-      renderLandingStage();
-    } else {
-      renderBootStage();
+function ensureStatusPolling() {
+  if (statusPollTimer) return;
+  statusPollTimer = window.setInterval(() => {
+    if (state.connectionStatus.phase === 'ready') {
+      clearInterval(statusPollTimer);
+      statusPollTimer = null;
+      return;
     }
-  }
+    void refreshArchiveStatus();
+  }, 15000);
 }
 
-function startStatusPolling() {
-  if (state.pollTimer) {
-    window.clearInterval(state.pollTimer);
-  }
-
-  state.pollTimer = window.setInterval(() => {
-    void refreshStatus();
-  }, 4000);
+function updatePendingAssistantMessage(messageId = '', statusMessage = '') {
+  updateChatMessage(messageId, {
+    content: String(statusMessage || 'Working on your question...').trim(),
+    pending: true
+  });
+  scrollToBottom();
 }
 
-async function runQuery(question = '') {
-  const cleanQuestion = String(question || '').trim();
-  if (!cleanQuestion || state.isQuerying) return;
+function completeAssistantMessage(messageId = '', payload = {}) {
+  updateChatMessage(messageId, {
+    content: answerTextFromPayload(payload),
+    pending: false,
+    actions: suggestionsFromPayload(payload)
+  });
+  state.canvasLayout = buildCanvasLayoutFromPayload(payload);
+  scrollToBottom();
+  openCanvasOnMobile();
+}
+
+function failAssistantMessage(messageId = '', payload = {}) {
+  const message = answerTextFromPayload(payload) || 'The live stream ended before an answer arrived.';
+  updateChatMessage(messageId, {
+    content: message,
+    pending: false,
+    actions: state.starterPrompts.slice(0, 3)
+  });
+  state.canvasLayout = buildErrorCanvasLayout(message);
+  scrollToBottom();
+}
+
+function finishQuery(requestId) {
+  if (requestId !== state.activeRequestId) return;
+  closeActiveStream();
+  state.isQuerying = false;
+}
+
+function buildStreamUrl(question = '') {
+  const url = new URL('/api/query/stream', window.location.origin);
+  url.searchParams.set('question', question);
+  if (state.sessionId) {
+    url.searchParams.set('sessionId', state.sessionId);
+  }
+  return url.toString();
+}
+
+function runQuery(rawQuestion = '') {
+  const question = String(rawQuestion || '').trim();
+  if (!question || state.isQuerying) return;
+
+  closeActiveStream();
+  state.activeRequestId += 1;
+  const requestId = state.activeRequestId;
 
   state.isQuerying = true;
   state.hasAskedQuestion = true;
-  const requestId = ++state.activeRequestId;
+  appendChatMessage('user', question);
+  const assistantMessage = appendChatMessage('assistant', 'Connecting to the live stream...', {
+    pending: true
+  });
 
-  appendChatMessage('user', `<p class="chat-copy">${safeText(cleanQuestion)}</p>`);
-  const pendingNode = renderPendingAssistant();
-  renderStageSkeleton(cleanQuestion);
+  elements.chatInput.value = '';
+  resizeComposer();
+  state.canvasLayout = buildSkeletonCanvasLayout(question);
   openCanvasOnMobile();
+  scrollToBottom();
 
-  elements.sendButton.disabled = true;
-  elements.sendButton.textContent = 'Mapping';
+  const stream = new EventSource(buildStreamUrl(question));
+  activeStream = stream;
 
-  try {
-    const payload = await fetchJson('/api/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: cleanQuestion })
-    });
+  stream.addEventListener('status', (event) => {
+    if (requestId !== state.activeRequestId) return;
+    const payload = parseEventPayload(event);
+    updatePendingAssistantMessage(assistantMessage.id, payload.message || 'Working on your question...');
+  });
 
-    if (isStaleRequest(requestId)) return;
+  stream.addEventListener('answer', (event) => {
+    if (requestId !== state.activeRequestId) return;
+    const payload = parseEventPayload(event);
+    completeAssistantMessage(assistantMessage.id, payload);
+  });
 
-    state.lastPayload = payload;
-    updateChatMessage(pendingNode, 'assistant', renderAssistantPayload(payload));
-    await renderDynamicStage(detailData(payload), payload, requestId);
-  } catch (error) {
-    if (isStaleRequest(requestId)) return;
-    updateChatMessage(
-      pendingNode,
-      'assistant',
-      `<p class="chat-copy">${safeText(error.message || 'Unable to complete this query right now.')}</p>`
-    );
-    renderErrorStage(error.message);
-  } finally {
-    if (!isStaleRequest(requestId)) {
-      state.isQuerying = false;
-      elements.sendButton.disabled = false;
-      elements.sendButton.textContent = 'Map Signal';
-      elements.chatInput.value = '';
-      resizeComposer();
-      elements.chatInput.focus();
+  stream.addEventListener('error', (event) => {
+    if (requestId !== state.activeRequestId) return;
+    const payload = parseEventPayload(event);
+    if (Object.keys(payload).length) {
+      failAssistantMessage(assistantMessage.id, payload);
+      return;
     }
-  }
+
+    failAssistantMessage(assistantMessage.id, {
+      answer: 'The live stream was interrupted before the response completed.'
+    });
+    finishQuery(requestId);
+  });
+
+  stream.addEventListener('done', () => {
+    if (requestId !== state.activeRequestId) return;
+    finishQuery(requestId);
+  });
 }
 
-function bindEvents() {
-  elements.chatForm.addEventListener('submit', async (event) => {
+function seedInitialChat() {
+  if (toArray(state.chatHistory).length) return;
+  appendChatMessage(
+    'assistant',
+    'Ask about a player, team, match, live score, or comparison and I will answer it here in the chat.',
+    {
+      actions: state.starterPrompts.slice(0, 4)
+    }
+  );
+}
+
+function handleChipClick(event) {
+  const trigger = event.target.closest('.chip[data-question]');
+  if (!trigger) return;
+  event.preventDefault();
+  const question = String(trigger.dataset.question || '').trim();
+  if (!question) return;
+  runQuery(question);
+}
+
+function bindUi() {
+  elements.chatForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    await runQuery(elements.chatInput.value);
+    runQuery(elements.chatInput.value);
   });
 
-  elements.chatInput.addEventListener('input', resizeComposer);
-  elements.chatInput.addEventListener('keydown', async (event) => {
-    if (event.key !== 'Enter' || event.shiftKey) return;
-    event.preventDefault();
-    await runQuery(elements.chatInput.value);
+  elements.chatInput.addEventListener('input', () => {
+    resizeComposer();
   });
 
-  document.body.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-question]');
-    if (!button) return;
-    await runQuery(button.dataset.question || '');
-  });
+  if (elements.mobileBack) {
+    elements.mobileBack.addEventListener('click', () => {
+      closeCanvasOnMobile();
+    });
+  }
 
-  elements.mobileBack.addEventListener('click', closeCanvasOnMobile);
+  document.addEventListener('click', handleChipClick);
   window.addEventListener('resize', syncViewportMode);
 }
 
-function renderStarterDeck() {
-  elements.starterChips.innerHTML = STARTER_PROMPTS.map(
-    (prompt) => `<button class="chip" type="button" data-question="${safeText(prompt)}">${safeText(prompt)}</button>`
-  ).join('');
-}
-
-async function init() {
+async function bootstrapApp() {
+  state.sessionId = getOrCreateSessionId();
+  seedInitialChat();
   renderStarterDeck();
-  bindEvents();
+  renderConnectionStatus();
+  renderComposerState();
   resizeComposer();
-  renderAssistantIntro();
-  renderBootStage();
-  await refreshStatus();
-  void loadLandingData();
-  startStatusPolling();
+  setLandingCanvasIfIdle();
+  ensureStatusPolling();
+
+  await Promise.allSettled([refreshArchiveStatus(), refreshHomeData(), refreshLiveData()]);
+  setLandingCanvasIfIdle();
 }
 
-init().catch((error) => {
-  renderErrorStage(error.message);
+subscribe('starterPrompts', () => renderStarterDeck());
+subscribe('connectionStatus', () => {
+  renderConnectionStatus();
+  setLandingCanvasIfIdle();
 });
+subscribe('isQuerying', () => renderComposerState());
+subscribe('homeData', () => setLandingCanvasIfIdle());
+subscribe('liveData', () => setLandingCanvasIfIdle());
+
+bindUi();
+void bootstrapApp();
