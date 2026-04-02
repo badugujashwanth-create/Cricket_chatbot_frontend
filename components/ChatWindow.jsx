@@ -63,11 +63,92 @@ function renderRecentMatches(matches = []) {
   );
 }
 
+function renderSquadPlayers(players = [], type = '') {
+  if (!Array.isArray(players) || !players.length) return null;
+  const isPlayingXi = type === 'playing_xi';
+
+  if (isPlayingXi) {
+    return (
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Playing XI
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {players.map((player, index) => (
+            <span
+              key={`${player}-${index}`}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100"
+            >
+              {player}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 border-t border-white/10 pt-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+        Squad Players
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {players.map((player, index) => (
+          <div
+            key={`${player?.name || player}-${index}`}
+            className="rounded-2xl border border-white/8 bg-white/5 p-3"
+          >
+            {player?.image ? (
+              <img
+                src={player.image}
+                alt={player.name || 'Player'}
+                className="mb-3 h-28 w-full rounded-2xl object-cover"
+              />
+            ) : null}
+            <p className="text-sm font-semibold text-white">{player?.name || String(player)}</p>
+            {player?.role ? <p className="mt-1 text-xs text-slate-400">{player.role}</p> : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function pickPrimaryEntity(extra = {}) {
+  const entities = extra?.entities && typeof extra.entities === 'object' ? extra.entities : {};
+  return entities.player || entities.team || entities.left || entities.right || {};
+}
+
+function getResponseImage(payload = {}) {
+  const primaryEntity = pickPrimaryEntity(payload?.extra || {});
+  return String(
+    payload?.image ||
+      primaryEntity?.image_url ||
+      payload?.extra?.image_url ||
+      ''
+  ).trim();
+}
+
+function getResponseDescription(payload = {}) {
+  const extra = payload?.extra && typeof payload.extra === 'object' ? payload.extra : {};
+  const primaryEntity = pickPrimaryEntity(extra);
+  return String(
+    primaryEntity?.description ||
+      extra?.player_description ||
+      extra?.team_description ||
+      primaryEntity?.short_description ||
+      ''
+  ).trim();
+}
+
 function ResponseCard({ payload = {}, fallbackContent = '' }) {
   const stats = payload?.stats && typeof payload.stats === 'object' ? Object.entries(payload.stats) : [];
   const extra = payload?.extra && typeof payload.extra === 'object' ? payload.extra : {};
   const rows = Array.isArray(extra.rows) ? extra.rows : [];
   const recentMatches = Array.isArray(extra.recent_matches) ? extra.recent_matches : [];
+  const players = Array.isArray(extra.players) ? extra.players : [];
+  const responseImage = getResponseImage(payload);
+  const responseDescription = getResponseDescription(payload);
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/85 shadow-2xl shadow-black/30">
@@ -83,12 +164,36 @@ function ResponseCard({ payload = {}, fallbackContent = '' }) {
       </div>
 
       <div className="px-5 py-5 sm:px-6">
-        {payload.image ? (
-          <img
-            src={payload.image}
-            alt={payload.title || 'Cricket response'}
-            className="mb-5 h-56 w-full rounded-3xl object-cover"
-          />
+        {responseImage || responseDescription ? (
+          <div
+            className={`mb-5 grid gap-4 rounded-3xl border border-white/8 bg-white/[0.03] p-4 ${
+              responseImage ? 'sm:grid-cols-[180px,minmax(0,1fr)]' : ''
+            }`}
+          >
+            {responseImage ? (
+              <img
+                src={responseImage}
+                alt={payload.title || 'Cricket response'}
+                className="h-44 w-full rounded-2xl object-cover sm:h-full"
+              />
+            ) : null}
+            <div className="min-w-0">
+              {responseDescription ? (
+                <>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cricket/75">
+                    Wikipedia Snapshot
+                  </p>
+                  <p className="text-sm leading-7 text-slate-200">
+                    {responseDescription}
+                  </p>
+                </>
+              ) : responseImage ? (
+                <p className="text-sm leading-7 text-slate-300">
+                  Verified cricket profile image attached to this response.
+                </p>
+              ) : null}
+            </div>
+          </div>
         ) : null}
 
         <div className="whitespace-pre-line text-sm leading-7 text-slate-100 sm:text-[15px]">
@@ -112,6 +217,7 @@ function ResponseCard({ payload = {}, fallbackContent = '' }) {
         ) : null}
 
         {renderResponseRows(rows)}
+        {renderSquadPlayers(players, payload.type)}
         {renderRecentMatches(recentMatches)}
       </div>
     </div>

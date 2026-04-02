@@ -1,10 +1,17 @@
+function parseRequestError(payload = {}, fallbackMessage = 'Request failed.') {
+  return (
+    String(payload?.summary || payload?.message || payload?.error || '').trim() ||
+    fallbackMessage
+  );
+}
+
 window.Home = function Home() {
   const [messages, setMessages] = React.useState([
     {
       id: 'welcome',
       role: 'assistant',
       content:
-        'Ask any cricket question about players, teams, matches, comparisons, or records. I will answer in one clear response block.'
+        'Ask any cricket question about players, teams, matches, comparisons, records, or live scores. I will answer in one clear response block.'
     }
   ]);
   const [inputValue, setInputValue] = React.useState('');
@@ -36,7 +43,7 @@ window.Home = function Home() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(payload.summary || payload.message || 'Request failed.');
+        throw new Error(parseRequestError(payload, 'Request failed.'));
       }
 
       setMessages((current) => [

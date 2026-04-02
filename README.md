@@ -1,39 +1,25 @@
 # Cricket Chat Bot Frontend
 
-Plain HTML, CSS, and JavaScript frontend for the Cricket Chat Bot experience. The UI is a split-pane cricket analytics canvas that turns natural-language questions into dynamic player, team, match, comparison, leaderboard, and live-update views.
+Plain HTML, CSS, and browser-hosted React frontend for the Cricket Chat Bot experience. The UI is a centered single-column chat surface that turns natural-language questions into one structured cricket response block.
 
 ## What This Frontend Does
 
 - Provides a chat-driven interface for cricket questions
-- Renders a dynamic analytics stage based on backend response types
-- Shows archive readiness and boot state from the backend
-- Surfaces live-score highlights from CricAPI-backed endpoints
-- Supports desktop split-pane layout and mobile stage takeover behavior
-- Uses zero build tooling and runs directly in the browser
+- Renders one structured response card inside the chat thread
+- Supports player, team, match, comparison, record, squad, and playing-XI responses
+- Uses zero build tooling and runs directly in the browser through CDN-hosted React
 
 ## File Layout
 
 - `index.html`: app shell, layout regions, and semantic containers
-- `styles.css`: Stadium Night visual system, responsive layout, and motion
-- `script.js`: API calls, chat flow, state management, and dynamic stage rendering
+- `styles.css`: dark cricket UI theme and responsive layout
+- `app.jsx`: root app bootstrap
+- `components/`: Header, chat window, and input components
+- `pages/Home.jsx`: query flow and application state
 
 ## UI Model
 
-The interface is split into two primary zones:
-
-- Left pane: chat controls, starter prompts, and conversation thread
-- Right pane: analytics stage that rebuilds itself from the latest payload
-
-The canvas renderer is driven by the backend response `data.type`. Current stage modes include:
-
-- `player_stats`
-- `team_stats`
-- `compare_players`
-- `match_summary`
-- `head_to_head`
-- `top_players`
-- `live_update`
-- fallback summary mode for any unrecognized payload
+The UI renders one chat thread. Each assistant reply is shown as a single structured response card driven by the backend payload type.
 
 ## Backend Dependency
 
@@ -46,7 +32,7 @@ Primary endpoints used by the UI:
 - `GET /api/cricapi/live-scores?limit=4&includeRecent=true`
 - `POST /api/query`
 
-The UI also fetches player headshots from Wikipedia and falls back to generated avatars when no image is found.
+The UI renders Wikipedia-backed player and team images when the backend provides them.
 
 ## Local Run
 
@@ -66,46 +52,33 @@ If you serve this frontend from a static server, the API requests still need a r
 
 ## Interaction Flow
 
-1. On load, the UI renders a boot state and checks `GET /api/status`.
-2. If the archive is ready, it loads the landing data from `/api/home`.
-3. It also requests a small live-score strip from `/api/cricapi/live-scores`.
-4. When the user submits a question, the frontend posts it to `/api/query`.
-5. The assistant summary is inserted into the chat thread.
-6. The stage renderer selects a dedicated layout based on `payload.data.type`.
+1. On load, the UI renders the assistant welcome state.
+2. When the user submits a question, the frontend posts it to `/api/query`.
+3. The assistant inserts one structured response block into the chat thread.
 
 ## UX Features
 
-- Starter prompt chips for quick exploration
 - Auto-growing message composer
-- Animated skeleton state while queries are resolving
-- Structured stage layouts for different cricket intents
-- Follow-up suggestion chips from backend suggestions or followups
-- Mobile canvas mode with a stage-back control
-- Status pill showing archive readiness and loading progress
+- Single-card assistant responses
+- Inline squad and playing-XI grids
+- Wikipedia-backed images and descriptions in the response card
 
 ## Design Direction
 
-The current UI uses a broadcast-style visual system:
-
-- Stadium Night theme
-- bold analytics cards and signal rows
-- conversational left rail with chip-based prompting
-- motion-driven transitions for stage updates
+The current UI uses a minimal dark cricket dashboard style with one professional response card per answer.
 
 ## No Build Step
 
 This repository intentionally avoids bundlers and frameworks.
 
 - No npm install is required for the frontend itself
-- No transpilation step is required
-- The browser loads `index.html`, `styles.css`, and `script.js` directly
+- No transpilation build step is required
+- The browser loads `index.html`, `styles.css`, and the JSX files directly through Babel standalone
 
 ## Development Notes
 
-- The frontend assumes backend JSON responses return stable `summary`, `data`, and suggestion fields.
-- The canvas content is derived from normalized response objects rather than hard-coded routes.
-- `script.js` uses a single shared state object to coordinate status polling, live cards, and active requests.
-- On smaller screens, the analytics stage opens over the chat after a query is sent.
+- The frontend assumes backend JSON responses return stable `type`, `title`, `summary`, `stats`, and `extra` fields.
+- Squad cards read `extra.players` and render them inline in the same response block.
 
 ## Example Queries
 
