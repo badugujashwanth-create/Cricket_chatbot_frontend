@@ -1,7 +1,5 @@
-const root = ReactDOM.createRoot(document.getElementById('root'));
+import Home from './pages/Home';
 
-root.render(
-  <React.StrictMode>
-    <Home />
-  </React.StrictMode>
-);
+export default function App() {
+  return <Home />;
+}
