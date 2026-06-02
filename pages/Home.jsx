@@ -4,14 +4,44 @@ import ChatWindow from '../components/ChatWindow';
 import Header from '../components/Header';
 import InputBox from '../components/InputBox';
 
+function normalizeUrl(value = '') {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function cleanResponseText(value = '') {
+  return String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseJsonSafely(value = '') {
+  if (!String(value || '').trim()) return {};
+
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return {};
+  }
+}
+
 function parseRequestError(payload = {}, fallbackMessage = 'Request failed.') {
+  if (typeof payload === 'string') {
+    return cleanResponseText(payload) || fallbackMessage;
+  }
+
   return (
     String(payload?.summary || payload?.message || payload?.error || '').trim() ||
     fallbackMessage
   );
 }
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+const BACKEND_ORIGIN = normalizeUrl(
+  import.meta.env.VITE_BACKEND_URL ||
+    (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin)
+);
+const SOCKET_URL = normalizeUrl(import.meta.env.VITE_SOCKET_URL || BACKEND_ORIGIN);
+const QUERY_URL = `${BACKEND_ORIGIN}/api/query`;
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -34,6 +64,9 @@ export default function Home() {
     socket.on('connect', () => setLiveConnected(true));
     socket.on('disconnect', () => setLiveConnected(false));
     socket.on('live-score-alert', (payload = {}) => {
+      const alertType = String(payload.type || '').trim();
+      if (alertType === 'socket_ready') return;
+
       const summary = String(payload.summary || '').trim();
       if (!summary) return;
       setMessages((current) => {
@@ -73,17 +106,32 @@ export default function Home() {
       throw new Error('Please type your question.');
     }
 
-    const response = await fetch('/api/query', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ question: cleanQuestion })
-    });
-    const payload = await response.json().catch(() => ({}));
+    let response;
+    try {
+      response = await fetch(QUERY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ question: cleanQuestion })
+      });
+    } catch (_) {
+      throw new Error(
+        `Unable to reach the backend at ${BACKEND_ORIGIN}. Start the backend server and try again.`
+      );
+    }
+
+    const responseText = await response.text().catch(() => '');
+    const payload = parseJsonSafely(responseText);
 
     if (!response.ok) {
-      throw new Error(parseRequestError(payload, 'Request failed.'));
+      throw new Error(
+        parseRequestError(
+          payload,
+          cleanResponseText(responseText) ||
+            `Backend request failed (${response.status}). Check that ${BACKEND_ORIGIN} is running.`
+        )
+      );
     }
 
     return payload;
