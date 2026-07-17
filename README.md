@@ -1,5 +1,11 @@
 # Cricket Chat Bot Frontend
 
+> **Status: Active Development** — The production bundle builds successfully; end-to-end behavior depends on the separate backend.
+
+[![Watch the Cricket Chatbot Web demo](docs/demo/demo-thumbnail.png)](docs/demo/demo.webm)
+
+> Watch the locally recorded interface overview and product architecture boundary.
+
 React + Vite frontend for the Cricket Chat Bot. It provides a chat-style cricket assistant UI that sends natural-language questions to the backend, renders structured response cards, highlights detected cricket entities, displays charts when the backend supplies chart data, and listens for live match push alerts over Socket.IO.
 
 ## Overview
@@ -436,3 +442,14 @@ Then restart the backend.
 - Keep response sections optional; the backend can omit fields depending on provider availability.
 - Do not store API keys in the frontend. All provider keys belong in the backend `.env`.
 - The frontend is intentionally presentation-focused. Cricket routing, data retrieval, and synthesis belong in the backend.
+
+## Related repositories
+
+- **Frontend:** this repository — React/Vite interface, visualization, and live connection state.
+- **Backend:** [Cricket_chatbot_Backend](https://github.com/badugujashwanth-create/Cricket_chatbot_Backend) — natural-language routing, datasets, providers, retrieval, and Socket.IO events.
+
+See [docs/TEST_REPORT.md](docs/TEST_REPORT.md) for current verification and [docs/demo/DEMO_SCRIPT.md](docs/demo/DEMO_SCRIPT.md) for the shared product demo plan.
+
+## License status
+
+No license file is currently present. All rights remain with the copyright holder unless a license is added manually.
