@@ -83,10 +83,14 @@ export default function ResponseChart({ chartData = null }) {
 
   if (!chartData?.type) return null;
 
+  const chartLabel = String(chartData.title || 'Cricket data chart').trim();
+
   return (
-    <div className="mt-5 rounded-3xl border border-white/8 bg-white/[0.03] p-4">
+    <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
       <div className="h-[260px] w-full">
-        <canvas ref={canvasRef} />
+        <canvas ref={canvasRef} role="img" aria-label={chartLabel}>
+          {chartLabel}
+        </canvas>
       </div>
     </div>
   );
