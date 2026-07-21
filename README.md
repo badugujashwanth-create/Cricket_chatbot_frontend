@@ -6,6 +6,12 @@ React client for the dataset-grounded [Cricket Intelligence API](https://github.
 
 > Portfolio prototype. The verified local profile uses repository-curated data. It does not claim live scores, Cricbuzz connectivity, official rankings, exhaustive statistics, predictions, or production availability.
 
+[![Open the current Cricket Intelligence case study](docs/demo/demo-thumbnail.png)](https://jashwanth-portfolio-ten.vercel.app/work/cricket-intelligence/)
+
+[Current API walkthrough MP4](https://jashwanth-portfolio-ten.vercel.app/media/cricket-api/demo.mp4) · [Download WebM](https://jashwanth-portfolio-ten.vercel.app/media/cricket-api/demo.webm) · [Captions](https://jashwanth-portfolio-ten.vercel.app/media/cricket-api/demo-captions.vtt)
+
+The older web-only recording remains in `docs/demo` as historical evidence but is not promoted as the current combined-product walkthrough.
+
 ## Verified workflow
 
 1. Read API, archive, and optional-provider availability from `/api/status`.
