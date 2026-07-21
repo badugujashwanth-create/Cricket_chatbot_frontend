@@ -1,105 +1,68 @@
-export default function InputBox({
-  value,
-  onChange,
-  onSubmit,
-  setMessages = () => {},
-  setIsLoading = () => {},
-  disabled = false
-}) {
-  async function handleSubmit() {
-    const question = String(value || '').trim();
-    if (!question || disabled || typeof onSubmit !== 'function') return;
+import { CornerDownLeft, Send } from 'lucide-react';
 
-    const requestId = `request-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-    const statusMessageId = `${requestId}-status`;
-    const userMessage = {
-      id: `${requestId}-user`,
-      role: 'user',
-      content: question
-    };
-    const statusMessage = {
-      id: statusMessageId,
-      role: 'system',
-      content: '\u{1F9E0} Analyzing query intent...',
-      isStatus: true
-    };
+const MAX_QUESTION_LENGTH = 500;
 
-    setMessages((current) => [...current, userMessage, statusMessage]);
-    onChange('');
-    setIsLoading(true);
+export default function InputBox({ value, onChange, onSubmit, disabled = false }) {
+  const cleanValue = String(value || '');
+  const canSubmit = Boolean(cleanValue.trim()) && !disabled;
 
-    try {
-      const payload = await onSubmit(question);
-      const assistantMessage = {
-        id: `${requestId}-assistant`,
-        role: 'assistant',
-        content: String(payload?.summary || 'No answer returned.').trim(),
-        payload
-      };
-
-      setMessages((current) => {
-        const statusIndex = current.findIndex((message) => message.id === statusMessageId);
-        const withoutStatus = current.filter((message) => message.id !== statusMessageId);
-        if (statusIndex === -1) {
-          return [...withoutStatus, assistantMessage];
-        }
-        withoutStatus.splice(statusIndex, 0, assistantMessage);
-        return withoutStatus;
-      });
-    } catch (error) {
-      const errorMessage = {
-        id: `${requestId}-error`,
-        role: 'assistant',
-        content: error?.message || 'Something went wrong while reaching the cricket assistant.'
-      };
-
-      setMessages((current) => {
-        const statusIndex = current.findIndex((message) => message.id === statusMessageId);
-        const withoutStatus = current.filter((message) => message.id !== statusMessageId);
-        if (statusIndex === -1) {
-          return [...withoutStatus, errorMessage];
-        }
-        withoutStatus.splice(statusIndex, 0, errorMessage);
-        return withoutStatus;
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  function handleSubmit() {
+    if (!canSubmit || typeof onSubmit !== 'function') return;
+    onSubmit(cleanValue);
   }
 
   return (
     <form
-      className="flex flex-col gap-3 rounded-[28px] border border-white/10 bg-panel/90 p-4 shadow-2xl backdrop-blur sm:flex-row sm:items-end"
+      className="rounded-[26px] border border-white/10 bg-panel/95 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl sm:p-4"
+      aria-busy={disabled}
       onSubmit={(event) => {
         event.preventDefault();
         handleSubmit();
       }}
     >
-      <label className="flex-1">
-        <span className="sr-only">Message</span>
-        <textarea
-          value={value}
-          rows={1}
-          disabled={disabled}
-          placeholder="Ask about players, teams, matches, comparisons, records, or live scores..."
-          className="min-h-[60px] w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-4 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-cricket/35 focus:ring-2 focus:ring-cricket/20"
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              handleSubmit();
-            }
-          }}
-        />
-      </label>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="min-w-0 flex-1" htmlFor="cricket-question">
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+            Ask a cricket question
+          </span>
+          <textarea
+            id="cricket-question"
+            value={cleanValue}
+            rows={2}
+            maxLength={MAX_QUESTION_LENGTH}
+            disabled={disabled}
+            aria-describedby="composer-help composer-count"
+            placeholder="For example: What is LBW?"
+            className="min-h-[72px] w-full resize-none rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-300/20 disabled:cursor-wait disabled:opacity-70"
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+        </label>
 
-      <button
-        type="submit"
-        disabled={disabled || !String(value || '').trim()}
-        className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-cricket px-6 text-sm font-semibold text-slate-950 shadow-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[140px]"
-      >
-        Send
-      </button>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-6 text-sm font-bold text-slate-950 shadow-glow transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-45 sm:min-w-[132px]"
+        >
+          <Send aria-hidden="true" className="h-4 w-4" strokeWidth={2.4} />
+          {disabled ? 'Working' : 'Ask'}
+        </button>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-4 px-1 text-xs text-slate-500">
+        <span id="composer-help" className="inline-flex items-center gap-1.5">
+          <CornerDownLeft aria-hidden="true" className="h-3.5 w-3.5" />
+          Enter to ask · Shift + Enter for a new line
+        </span>
+        <span id="composer-count" aria-live="polite">
+          {cleanValue.length}/{MAX_QUESTION_LENGTH}
+        </span>
+      </div>
     </form>
   );
 }
